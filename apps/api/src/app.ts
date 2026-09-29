@@ -2,11 +2,14 @@ import { FEATURES } from "@aihot/industry/features";
 import Fastify, { type FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { OAUTH_PROBE_PATHS, resolveRedirect } from "@aihot/contracts/http-policy";
+import { loginExempt, readSiteSession } from "@aihot/contracts/site-session";
+import { qzGateOn } from "@aihot/backend/auth/qz";
 import { sql } from "@aihot/backend/db";
 import { registerSite } from "./routes/site.ts";
 import { registerLeaderboard } from "./routes/leaderboard.ts";
 import { registerOg } from "./routes/og.ts";
 import { registerAdminAuth } from "./routes/admin-auth.ts";
+import { registerQzAuth } from "./routes/qz-auth.ts";
 import { registerAdmin } from "./routes/admin.ts";
 import { registerIngest } from "./routes/ingest.ts";
 import { registerV1, registerV1Fallbacks } from "./routes/v1.ts";
@@ -57,6 +60,33 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   });
 
+  // The reader gate. With QZ_REQUIRE_LOGIN on, everything the reader can see needs a session; the
+  // sign-in machinery, the console and the assets the sign-in page needs are listed in `loginExempt`.
+  // It runs after the redirect table so legacy addresses still redirect rather than bounce to sign-in.
+  app.addHook("onRequest", async (req, reply) => {
+    if (!qzGateOn()) return;
+    const raw = req.raw.url ?? "/";
+    const qi = raw.indexOf("?");
+    const pathname = qi >= 0 ? raw.slice(0, qi) : raw;
+    if (loginExempt(pathname)) return;
+    if (readSiteSession(req.headers.cookie)) return;
+    // A browser is sent to the sign-in page; anything else (feed reader, script, agent) gets a 401.
+    if ((req.headers.accept ?? "").includes("text/html")) {
+      return reply.header("Cache-Control", "no-store").redirect(`/login?${new URLSearchParams({ return: raw.slice(0, 2000) })}`, 302);
+    }
+    return sendProblem(req, reply, { status: 401, code: "unauthorized", detail: "Sign in with Q助理 to read this site." });
+  });
+
+  // A gated page belongs to one reader, so no shared cache may keep it — whatever the route asked for.
+  app.addHook("onSend", async (req, reply) => {
+    if (!qzGateOn()) return;
+    const raw = req.raw.url ?? "/";
+    const qi = raw.indexOf("?");
+    if (loginExempt(qi >= 0 ? raw.slice(0, qi) : raw)) return;
+    reply.header("Cache-Control", "private, no-store");
+    reply.header("X-Accel-Expires", "0");
+  });
+
   app.get("/api/health", async (_req, reply) => {
     const started = Date.now();
     await sql`SELECT 1`;
@@ -67,6 +97,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   if (FEATURES.leaderboard) registerLeaderboard(app);
   registerOg(app);
   registerAdminAuth(app);
+  registerQzAuth(app);
   registerAdmin(app);
 
   registerIngest(app);

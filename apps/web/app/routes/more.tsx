@@ -1,9 +1,11 @@
 import { SITE } from "@aihot/industry/site";
 import { FEATURES } from "@aihot/industry/features";
+import type { Reader } from "@aihot/contracts/site-session";
 import type { ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
 import { pageMeta } from "../lib/seo";
 import { ThemeSwitch } from "../components/shell/ThemeSwitch";
+import { ReaderRow } from "../components/shell/ReaderCard";
 import { IconBookmark, IconChart, IconChevronRight, IconFlame, IconGrid, IconHeart, IconHistory, IconMessage, IconMoon, IconPlug } from "../components/icons";
 
 /** Shared caches may keep this page for five minutes. */
@@ -54,9 +56,15 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export default function MorePage() {
+  const root = useRouteLoaderData<{ reader: Reader | null }>("root");
   return (
     <div className="mx-auto max-w-[var(--page-max-reading)] pb-8">
       <h1 className="pb-4 pt-5 text-[22px] font-bold text-ink lg:pt-1">更多</h1>
+      {root?.reader && (
+        <div className="mb-3">
+          <ReaderRow reader={root.reader} />
+        </div>
+      )}
       <div className="space-y-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0 2xl:grid-cols-3">
         {GROUPS.map((g) => (
           <Group key={g.title} title={g.title}>

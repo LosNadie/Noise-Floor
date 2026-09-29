@@ -37,7 +37,7 @@ export default function LeaderboardSourcesPage() {
         <IconArrowLeft size={14} /> 返回模型榜
       </Link>
       <header className="pb-2 pt-3">
-        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">评测来源</h1>
+        <h1 className="display text-[26px] text-ink">评测来源</h1>
         <p className="mt-1.5 text-[13px] text-ink-3">每个来源测什么、怎样更新、是否进入排名，都可以在这里找到。</p>
         <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-baseline gap-6">

@@ -298,7 +298,7 @@ export default function LeaderboardModelPage() {
         <div className="flex items-center gap-4">
           <BrandMark brand={model.brand} size={52} />
           <div className="min-w-0">
-            <h1 className="text-[24px] font-semibold leading-[1.3] tracking-[-0.02em] text-ink">{model.name}</h1>
+            <h1 className="display text-[26px] text-ink">{model.name}</h1>
             <p className="num mt-1 text-[12.5px] text-ink-3">
               {model.provider ?? "—"} · {model.releasedAt ? `${model.releasedAt} 发布` : "发布日期待核实"} · {shortStamp(d.run.generatedAt)} 更新
             </p>

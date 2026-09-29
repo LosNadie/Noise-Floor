@@ -33,13 +33,15 @@ function bool(name: string, fallback: boolean): boolean {
 }
 
 
+/** Every generated absolute link uses this address, whatever Host a request arrives with. */
+const siteUrl = str("SITE_URL", SITE.defaultUrl).replace(/\/+$/, "");
+
 export const config = {
   databaseUrl: str("DATABASE_URL", "postgres://127.0.0.1:5432/aihot"),
   apiPort: int("API_PORT", 3001),
   webPort: int("WEB_PORT", 3000),
   apiBaseUrl: str("API_BASE_URL", "http://127.0.0.1:3001"),
-  // Every generated absolute link uses this address, whatever Host a request arrives with.
-  siteUrl: str("SITE_URL", SITE.defaultUrl).replace(/\/+$/, ""),
+  siteUrl,
   selectedVisibleAfterSeconds: int("SELECTED_VISIBLE_AFTER_SECONDS", 180),
   egressProxyUrl: env.EGRESS_PROXY_URL || null,
   allowPrivateNetworkFetch: bool("ALLOW_PRIVATE_NETWORK_FETCH", false),
@@ -60,6 +62,15 @@ export const config = {
   adminPassword: env.ADMIN_PASSWORD || null,
   adminUnionIds: (env.ADMIN_FEISHU_UNION_IDS || "").split(",").map((v) => v.trim()).filter(Boolean),
   adminEmails: (env.ADMIN_EMAILS || "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean),
+  /**
+   * Reader sign-in with Q助理. `QZ_LOGIN_ENABLED` offers the sign-in button; `QZ_REQUIRE_LOGIN` closes
+   * the whole site behind it. They are separate so the integration can be tried on a public site first.
+   * Without AppKey/AppSecret neither does anything, so an unconfigured deployment stays open.
+   */
+  qzLoginEnabled: bool("QZ_LOGIN_ENABLED", false),
+  qzRequireLogin: bool("QZ_REQUIRE_LOGIN", false),
+  /** How long a reader stays signed in. */
+  qzSessionDays: int("QZ_SESSION_DAYS", 30),
 };
 
 export type CredentialGroup = "models" | "collectors" | "integrations" | "auth";

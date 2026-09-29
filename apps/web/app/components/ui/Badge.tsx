@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 type Tone = "selected" | "accent" | "amber" | "hot" | "ok" | "neutral";
 
 const TONES: Record<Tone, string> = {
-  selected: "bg-amber-soft text-amber-ink",
+  // 精选 is an editorial mark, so it wears the brand accent rather than the amber that means "pending"
+  // in the reset monitor.
+  selected: "bg-accent-soft text-accent",
   accent: "bg-accent-soft text-accent",
   amber: "bg-amber-soft text-amber-ink",
   hot: "bg-hot-soft text-hot",

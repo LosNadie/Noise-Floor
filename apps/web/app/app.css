@@ -1,24 +1,26 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   AIHOT design tokens — the look of the original site: warm off-white paper,
-   ink text, one teal accent (cyan in dark), hairline borders, no gradients.
+   Noise Floor design tokens — a clean white/ink canvas in the manner of Meta's
+   product surfaces (hairline dividers, generous radii, soft elevation), carried
+   by one expressive signature: the brand gradient (blue → violet → magenta),
+   used sparingly for brand moments, ranks and heat.
    Components use the semantic names below; values change per theme only.
    --------------------------------------------------------------------------- */
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
+  --font-sans: "Inter var", "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 
-  /* Brand (VI), fixed across themes. */
-  --color-brand-teal: #176b75;
-  --color-brand-cyan-0: #5deef0;
-  --color-brand-cyan-20: #2ce2e8;
-  --color-brand-cyan-54: #12ccd8;
-  --color-brand-cyan-82: #08abc2;
-  --color-brand-cyan-100: #078ea9;
+  /* Brand (VI), fixed across themes: the stops of the signature gradient. The values themselves live
+     in :root as plain custom properties, so the decorative layer below can rely on them being present
+     even when no `bg-brand-*` utility happens to be generated. */
+  --color-brand-1: var(--brand-1);
+  --color-brand-2: var(--brand-2);
+  --color-brand-3: var(--brand-3);
+  --color-brand-4: var(--brand-4);
 
   /* Semantic colours. */
   --color-bg: var(--bg);
@@ -62,15 +64,16 @@
   --color-rank-3: var(--rank-3);
   --color-rank-rest: var(--rank-rest);
 
-  /* Radius scale: mark 5 (inline code, kbd, tiny tags and swatches), control 8 (inputs, small
-     blocks), tile 10 (list rows, hover areas), card 12, panel 14 (wells, pictures), sheet 16 (dialogs,
-     sheets, hero shells); pills are rounded-full. Arbitrary radii are not used. */
-  --radius-mark: 5px;
-  --radius-control: 8px;
-  --radius-tile: 10px;
-  --radius-card: 12px;
-  --radius-panel: 14px;
-  --radius-sheet: 16px;
+  /* Radius scale: Meta's surfaces are generously rounded — mark 6 (inline code, kbd, tiny tags and
+     swatches), control 10 (inputs, small blocks), tile 12 (list rows, hover areas), card 16, panel 20
+     (wells, pictures), sheet 24 (dialogs, sheets, hero shells); pills are rounded-full. Arbitrary
+     radii are not used. */
+  --radius-mark: 6px;
+  --radius-control: 10px;
+  --radius-tile: 12px;
+  --radius-card: 16px;
+  --radius-panel: 20px;
+  --radius-sheet: 24px;
 
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 
@@ -89,103 +92,114 @@
      and a 21:9 screen one of about 2.7:1. 236px is the sidebar and the main area's padding. */
   --page-max-wide: max(1200px, calc(270dvh - 236px));
   --page-max-reading: max(1100px, calc(200dvh - 236px));
+
+  /* The signature gradient's stops, and the gradient built from them. Fixed across themes. */
+  --brand-1: #0064e0;
+  --brand-2: #7b3fe4;
+  --brand-3: #e1306c;
+  --brand-4: #ff8a3d;
+  --gradient-brand: linear-gradient(100deg, var(--brand-1), var(--brand-2) 52%, var(--brand-3));
+
   color-scheme: light;
-  --bg: #faf9f6;
-  --bg-sunk: #f3f3ef;
-  --bg-muted: #e9ede9;
+  --bg: #ffffff;
+  --bg-sunk: #f5f6f8;
+  --bg-muted: #eceef1;
   --surface: #ffffff;
-  --surface-2: #fdfdfb;
+  --surface-2: #fbfbfd;
   --raised: #ffffff;
-  --sidebar: #fdfdfb;
-  --daybar: #f0f2ee;
-  --field: #eef1ed;
-  --ink: #202a30;
-  --ink-2: #303c42;
-  --ink-3: #59656b;
-  --ink-4: #657176;
-  --line: #dfe4e1;
-  --line-strong: #d1d9d5;
-  --line-soft: #e9ede9;
-  --accent: #176b75;
-  --accent-ink: #145f68;
-  --accent-soft: rgba(23, 107, 117, 0.08);
-  --accent-softer: rgba(23, 107, 117, 0.05);
+  --sidebar: #fafbfc;
+  --daybar: #f4f5f7;
+  --field: #eff1f4;
+  --ink: #0d0f12;
+  --ink-2: #24282e;
+  --ink-3: #606770;
+  --ink-4: #8a8d91;
+  --line: #e4e6eb;
+  --line-strong: #cfd3d9;
+  --line-soft: #eff1f4;
+  --accent: #0064e0;
+  --accent-ink: #0050b3;
+  --accent-soft: rgba(0, 100, 224, 0.08);
+  --accent-softer: rgba(0, 100, 224, 0.05);
   --accent-contrast: #ffffff;
-  --note: #526f72;
-  --hot: #b3402a;
-  --hot-soft: rgba(179, 64, 42, 0.08);
-  --amber: #b8873a;
-  --amber-ink: #7c5a24;
-  --amber-soft: rgba(184, 135, 58, 0.1);
-  --ok: #2f7d5c;
-  --ok-soft: rgba(47, 125, 92, 0.1);
-  --ok-ink: #2a6e51;
+  --note: #4a5560;
+  --hot: #e1306c;
+  --hot-soft: rgba(225, 48, 108, 0.09);
+  --amber: #e59a12;
+  --amber-ink: #96650a;
+  --amber-soft: rgba(229, 154, 18, 0.12);
+  --ok: #00a67e;
+  --ok-soft: rgba(0, 166, 126, 0.1);
+  --ok-ink: #00805f;
   /* Reset monitor: days mixed from the landed (green) and announced (amber) tones over the surface. */
-  --cal-plain: rgba(28, 39, 51, 0.024);
+  --cal-plain: rgba(13, 15, 18, 0.024);
   --cal-confirmed: color-mix(in srgb, var(--ok-ink) 12%, var(--surface));
   --cal-announced: color-mix(in srgb, var(--amber-ink) 14%, var(--surface));
   --cal-key-confirmed: color-mix(in srgb, var(--ok-ink) 30%, var(--surface));
   --cal-key-announced: color-mix(in srgb, var(--amber-ink) 30%, var(--surface));
-  --panel-quiet: color-mix(in srgb, var(--bg) 48%, var(--surface));
-  --rank-1: #b3402a;
-  --rank-2: #a3642f;
-  --rank-3: #96702e;
-  --rank-rest: #6b7684;
-  --shadow-card: 0 1px 2px rgba(32, 42, 48, 0.025);
-  --shadow-card-hover: 0 3px 12px rgba(32, 42, 48, 0.055);
-  --shadow-soft: 0 4px 12px rgba(28, 39, 51, 0.06);
-  --shadow-thumb: 0 1px 2px rgba(28, 39, 51, 0.1), 0 1px 1px rgba(28, 39, 51, 0.04);
-  --shadow-pop: 0 12px 32px rgba(28, 39, 51, 0.12);
-  --prose-ink: #26323a;
-  --code-bg: #f6f7f4;
-  --selection: rgba(23, 107, 117, 0.16);
+  --panel-quiet: color-mix(in srgb, var(--bg-sunk) 62%, var(--surface));
+  /* The ranking reads as the signature gradient: magenta, violet, blue, then quiet grey. */
+  --rank-1: #e1306c;
+  --rank-2: #7b3fe4;
+  --rank-3: #0064e0;
+  --rank-rest: #6b7280;
+  --shadow-card: 0 1px 2px rgba(13, 15, 18, 0.04), 0 1px 1px rgba(13, 15, 18, 0.02);
+  --shadow-card-hover: 0 10px 30px -14px rgba(13, 15, 18, 0.2), 0 2px 6px rgba(13, 15, 18, 0.04);
+  --shadow-soft: 0 6px 20px -6px rgba(13, 15, 18, 0.12);
+  --shadow-thumb: 0 1px 2px rgba(13, 15, 18, 0.1), 0 1px 1px rgba(13, 15, 18, 0.05);
+  --shadow-pop: 0 24px 56px -16px rgba(13, 15, 18, 0.24);
+  --shadow-glow: 0 12px 34px -12px rgba(0, 100, 224, 0.38);
+  --prose-ink: #1b1f24;
+  --code-bg: #f5f6f8;
+  --selection: rgba(0, 100, 224, 0.16);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #13191c;
-  --bg-sunk: #182024;
-  --bg-muted: #202a2f;
-  --surface: #1a2226;
-  --surface-2: #1d272b;
-  --raised: #202a2f;
-  --sidebar: #161e21;
-  --daybar: #182024;
+  --bg: #0a0b0d;
+  --bg-sunk: #131519;
+  --bg-muted: #1b1e23;
+  --surface: #121417;
+  --surface-2: #16191d;
+  --raised: #1c2026;
+  --sidebar: #0e1013;
+  --daybar: #131519;
   --field: rgba(255, 255, 255, 0.06);
-  --ink: #e7eceb;
-  --ink-2: #d2dada;
-  --ink-3: #a5b0b3;
-  --ink-4: #89979d;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.12);
-  --line-soft: rgba(255, 255, 255, 0.06);
-  --accent: #12ccd8;
-  --accent-ink: #2ce2e8;
-  --accent-soft: rgba(18, 204, 216, 0.12);
-  --accent-softer: rgba(18, 204, 216, 0.06);
-  --accent-contrast: #000000;
-  --note: #8fb8a8;
-  --hot: #d86a52;
-  --hot-soft: rgba(216, 106, 82, 0.12);
-  --amber: #d3b26a;
-  --amber-ink: #d3b26a;
-  --amber-soft: rgba(211, 178, 106, 0.12);
-  --ok: #5fc79a;
-  --ok-soft: rgba(95, 199, 154, 0.12);
-  --ok-ink: #7fd1ad;
+  --ink: #ecedef;
+  --ink-2: #d3d6db;
+  --ink-3: #9ba1a9;
+  --ink-4: #787f88;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.15);
+  --line-soft: rgba(255, 255, 255, 0.055);
+  --accent: #3b8cff;
+  --accent-ink: #6aa9ff;
+  --accent-soft: rgba(59, 140, 255, 0.14);
+  --accent-softer: rgba(59, 140, 255, 0.07);
+  --accent-contrast: #04070d;
+  --note: #a7b3c0;
+  --hot: #ff5c8a;
+  --hot-soft: rgba(255, 92, 138, 0.14);
+  --amber: #e8b45c;
+  --amber-ink: #e8b45c;
+  --amber-soft: rgba(232, 180, 92, 0.14);
+  --ok: #3ddc9a;
+  --ok-soft: rgba(61, 220, 154, 0.14);
+  --ok-ink: #6ee7b0;
   --cal-plain: rgba(255, 255, 255, 0.03);
-  --rank-1: #d86a52;
-  --rank-2: #d18a5e;
-  --rank-3: #d3b26a;
+  --rank-1: #ff5c8a;
+  --rank-2: #a879ff;
+  --rank-3: #5aa9ff;
   --rank-rest: #7b869a;
   --shadow-card: none;
   --shadow-card-hover: none;
-  --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.35);
-  --shadow-thumb: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.45);
-  --prose-ink: #d7dfdf;
-  --code-bg: #10151c;
-  --selection: rgba(18, 204, 216, 0.22);
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-thumb: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 28px 64px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 12px 34px -12px rgba(59, 140, 255, 0.45);
+  --prose-ink: #d7dbe0;
+  --code-bg: #0e1013;
+  --selection: rgba(59, 140, 255, 0.24);
 }
 
 @layer base {
@@ -310,11 +324,11 @@
   }
 }
 @utility card-hover {
-  transition: box-shadow 200ms var(--ease-out-quart), border-color 200ms, transform 200ms var(--ease-out-quart);
+  transition: box-shadow 220ms var(--ease-out-quart), border-color 220ms, transform 220ms var(--ease-out-quart);
   &:hover {
     box-shadow: var(--shadow-card-hover);
-    border-color: var(--line-strong);
-    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
+    transform: translateY(-2px);
   }
 }
 
@@ -389,6 +403,132 @@
   ::view-transition-new(*) {
     animation: none !important;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   The signature: the brand gradient as an expressive, artistic layer.
+   Everything here is decoration — it never carries meaning on its own, so the
+   site still reads correctly with the gradient switched off.
+   --------------------------------------------------------------------------- */
+
+/* A gradient-filled surface: brand marks, primary actions, the podium. */
+.grad-brand {
+  background-image: var(--gradient-brand);
+}
+
+/* Gradient type, for display headings and the wordmark. The fallback keeps the words readable if a
+   browser cannot clip a background to text. */
+.grad-text {
+  background-image: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .grad-text {
+    background-image: none;
+    color: var(--ink);
+  }
+}
+
+/* A short gradient hairline used as a section rule. */
+.grad-rule {
+  height: 3px;
+  width: 46px;
+  border-radius: 9999px;
+  background-image: var(--gradient-brand);
+}
+
+/* The aurora: soft brand-coloured light behind a hero or a section head. It stays inside the
+   container's width — the blur and the horizontal mask bleed it softly instead of overhanging, which
+   would otherwise give the page a horizontal scrollbar. */
+.aurora {
+  position: relative;
+  isolation: isolate;
+}
+.aurora::before {
+  content: "";
+  position: absolute;
+  inset: -46% 0 auto 0;
+  height: 360px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(44% 62% at 20% 48%, color-mix(in srgb, var(--brand-1) 34%, transparent), transparent 72%),
+    radial-gradient(40% 56% at 50% 14%, color-mix(in srgb, var(--brand-2) 30%, transparent), transparent 72%),
+    radial-gradient(46% 64% at 82% 52%, color-mix(in srgb, var(--brand-3) 28%, transparent), transparent 72%);
+  filter: blur(38px);
+  opacity: 0.5;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent);
+}
+[data-theme="dark"] .aurora::before {
+  opacity: 0.4;
+}
+
+/* Paper grain: keeps large flat areas from reading as flat, and gives the
+   gradient washes a printed rather than a screen-made texture. It paints above
+   the surface's own background but below its content, so text stays crisp. */
+.grain {
+  isolation: isolate;
+}
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.045;
+  mix-blend-mode: multiply;
+}
+[data-theme="dark"] .grain::after {
+  opacity: 0.07;
+  mix-blend-mode: screen;
+}
+
+/* A soft brand halo under a floating control. */
+.halo {
+  box-shadow: var(--shadow-glow);
+}
+
+/* Glass: a panel that sits over the aurora without hiding it. */
+.glass {
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+
+/* Display type: Meta sets its largest lines tight, heavy and confident. */
+.display {
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+/* A brand-tinted wash that fades in on hover, for cards that lead somewhere.
+   Like the grain, it sits above the surface's background and below its content. */
+.wash {
+  position: relative;
+  isolation: isolate;
+}
+.wash::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 260ms var(--ease-out-quart);
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--brand-1) 9%, transparent), transparent 62%),
+    radial-gradient(120% 140% at 100% 100%, color-mix(in srgb, var(--brand-3) 7%, transparent), transparent 62%);
+}
+.wash:hover::before {
+  opacity: 1;
 }
 
 /* ---------------------------------------------------------------------------

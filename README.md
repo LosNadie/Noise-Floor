@@ -1,3 +1,16 @@
+> ### 关于这个仓库
+>
+> 这是 [AIHOT](https://github.com/KKKKhazix/AIHOT)（数字生命卡兹克开源的行业热点站框架）的一个定制版，站名 **Noise Floor**。
+> 相对上游主要有三处改动：
+>
+> - **视觉**：换成更接近 Meta 产品语言的界面——纯白纸面、大圆角、细分割线，用一条「蓝 → 紫 → 洋红」的品牌渐变做点缀。
+>   改的是同一份设计令牌（`apps/web/app/app.css`），所以 24 个公开页面和整个后台一起变。
+> - **登录**：接入 Q助理开放平台的扫码登录，并支持把整站锁在登录之后。凭据没配置时门自动保持敞开，
+>   不会出现「锁上了但没人能登录」的情况。
+> - **品牌**：站名、报头图标、favicon、MCP 工具名前缀都换成了 Noise Floor。
+>
+> 下面这份 README 是上游框架的原文，除以上三点之外依然适用。
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">

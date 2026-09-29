@@ -244,7 +244,7 @@ export default function AgentPage() {
   return (
     <ReadingLayout aside={aside}>
       <header>
-        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">让 Agent 直接使用 {SITE.name}</h1>
+        <h1 className="display text-[26px] text-ink">让 Agent 直接使用 {SITE.name}</h1>
         <p className="mt-1.5 text-[13px] text-ink-3">三条接入路径都是匿名只读、无需 API Key：MCP、RSS、REST API v1。</p>
         <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
           <span className={pill}>匿名只读</span>

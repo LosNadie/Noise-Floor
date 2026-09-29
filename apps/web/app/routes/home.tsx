@@ -57,11 +57,25 @@ export default function Home() {
         <TodayLabel />
       </div>
       <div className="hidden lg:block">
-        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">{title}</h1>
-        <div className="mb-5 mt-4 flex items-center justify-between gap-4">
-          <CategoryTabs base="/" category={filters.category} channel={filters.channel} layoutId="home-cat-desk" className="min-w-0" />
-          <SearchField variant="track" keep={{ category: filters.category }} />
-        </div>
+        <header className="aurora grain relative">
+          <div className="flex items-end justify-between gap-8">
+            <div className="min-w-0">
+              <div className="mb-3 flex items-center gap-2.5">
+                <span className="grad-rule" aria-hidden="true" />
+                <span className="text-[11.5px] font-semibold uppercase tracking-[0.16em] text-ink-4">{withSubject("每日精选")}</span>
+              </div>
+              <h1 className="display grad-text text-[42px]">{title}</h1>
+              <p className="mt-2.5 max-w-[46ch] text-[14px] leading-[1.7] text-ink-3">{SITE.tagline}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-3 pb-1.5">
+              <TodayLabel />
+              <SearchField variant="track" keep={{ category: filters.category }} />
+            </div>
+          </div>
+          <div className="mb-5 mt-7 border-t border-line-soft pt-4">
+            <CategoryTabs base="/" category={filters.category} channel={filters.channel} layoutId="home-cat-desk" className="min-w-0" />
+          </div>
+        </header>
       </div>
 
       {data.hot && <HotTopics entries={data.hot} />}

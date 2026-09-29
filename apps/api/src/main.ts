@@ -29,3 +29,12 @@ const shutdown = async () => {
 };
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+
+// A stray promise rejection must not take the whole API down. On Windows a transient
+// "could not open file ...: Permission denied" from the database (a scanner holding a data
+// file) used to surface as an unhandled rejection and kill the process, so the whole site
+// went 503 until someone restarted it. The web process already logs instead of exiting;
+// mirror that here. Requests that fail still answer 503 through setErrorHandler.
+process.on("unhandledRejection", (reason) => {
+  console.error(JSON.stringify({ level: "error", msg: "unhandled rejection", error: String(reason).slice(0, 500) }));
+});

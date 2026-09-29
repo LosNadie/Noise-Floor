@@ -155,7 +155,7 @@ export default function FeedbackPage() {
   return (
     <ReadingLayout aside={<FeedbackAside />}>
       <header>
-        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">说说你的想法</h1>
+        <h1 className="display text-[26px] text-ink">说说你的想法</h1>
         <p className="mt-2 text-[14.5px] leading-relaxed text-ink-3">发现 bug、想要的功能、看不顺眼的地方，都可以告诉我，我都会看到。</p>
       </header>
 

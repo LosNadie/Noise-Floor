@@ -14,3 +14,8 @@ apps/web/.react-router/
 # Font package unpacked to regenerate the report nameplates (docs/customize.md)
 package/
 fontsource-noto-sans-sc-*.tgz
+
+# Assistant working directory and local-only helper scripts: project data, never published.
+.workbuddy-ai/
+start-shoot-hot.cmd
+stop-shoot-hot.cmd

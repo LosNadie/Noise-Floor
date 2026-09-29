@@ -168,7 +168,7 @@ export default function LeaderboardRulesPage() {
       </Link>
 
       <header className="pt-3">
-        <h1 className="text-[24px] font-semibold leading-[1.3] text-ink">排名怎么算</h1>
+        <h1 className="display text-[26px] text-ink">排名怎么算</h1>
         <p className="mt-1.5 text-[13px] text-ink-3">综合多家公开评测，了解排名背后的证据与方法。</p>
       </header>
 
