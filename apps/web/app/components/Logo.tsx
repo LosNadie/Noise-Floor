@@ -1,32 +1,33 @@
-// The site's mark (its name from industry/site.ts, set in type) and a small ring mark used as the
-// loader. A site with its own logo can replace Wordmark here.
+// The site's mark — a hand-drawn "noise floor" line: one baseline with uneven strokes rising out of
+// it, the signal emerging from the noise. Rendered from industry/brand/mark.png through a CSS mask
+// and painted with currentColor, so it follows the theme (ink on light, light on dark) without a
+// second asset. A site with its own logo can replace Wordmark here.
 import { useId } from "react";
 import { SITE } from "@aihot/industry/site";
+import markUrl from "@aihot/industry/brand/mark.png?url";
 
-/**
- * The mark: a rounded tile in the signature gradient carrying a four-bar waveform — the noise floor
- * the site is named for, drawn at the moment a signal rises out of it. Decorative; the name is set
- * in text beside it, so the mark carries no accessible name of its own.
- */
+/** The mark: the hand-drawn noise-floor stroke, tinted with the surrounding text color. */
 export function BrandMark({ size = 24, className = "" }: { size?: number; className?: string }) {
-  const gid = useId();
+  const width = Math.round(size * 1.62);
   return (
-    <svg viewBox="0 0 32 32" width={size} height={size} className={className} aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" style={{ stopColor: "var(--brand-1, #0064e0)" }} />
-          <stop offset="0.52" style={{ stopColor: "var(--brand-2, #7b3fe4)" }} />
-          <stop offset="1" style={{ stopColor: "var(--brand-3, #e1306c)" }} />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9.6" fill={`url(#${gid})`} />
-      <g style={{ fill: "var(--accent-contrast, #ffffff)" }}>
-        <rect x="7.3" y="17.6" width="3.2" height="6.4" rx="1.6" opacity="0.7" />
-        <rect x="12.4" y="11.8" width="3.2" height="12.2" rx="1.6" opacity="0.88" />
-        <rect x="17.5" y="8.3" width="3.2" height="15.7" rx="1.6" />
-        <rect x="22.6" y="14.8" width="3.2" height="9.2" rx="1.6" opacity="0.8" />
-      </g>
-    </svg>
+    <span
+      aria-hidden="true"
+      focusable="false"
+      className={`inline-block shrink-0 ${className}`}
+      style={{
+        width,
+        height: size,
+        backgroundColor: "currentColor",
+        WebkitMaskImage: `url(${markUrl})`,
+        maskImage: `url(${markUrl})`,
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+      }}
+    />
   );
 }
 
