@@ -42,3 +42,13 @@ const shutdown = async () => {
 };
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+
+// A stray promise rejection must not take the whole worker down. On Windows a transient
+// "could not open file ...: Permission denied" from the database (a scanner holding a data
+// file), or the database briefly refusing connections, used to surface through pg-boss as an
+// unhandled rejection and kill the process — after which nothing collected or processed
+// content until someone noticed. The api process logs instead of exiting; mirror that here.
+// pg-boss reconnects on its own, so the worker recovers without a restart.
+process.on("unhandledRejection", (reason) => {
+  console.error(JSON.stringify({ level: "error", msg: "unhandled rejection", error: String(reason).slice(0, 500) }));
+});

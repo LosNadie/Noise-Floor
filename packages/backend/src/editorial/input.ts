@@ -73,8 +73,16 @@ const KIND_LABEL: Record<string, string> = {
   rss: "RSS", web_list: "网页", json_list: "网页接口", x_search: "X 帖子", mp_account: "微信公众号", external: "外部上报",
 };
 
+/**
+ * How much body the structure step reads. It classifies, tags and pulls out event facts — it writes
+ * nothing a reader sees, so the gist is enough. This matters more than it looks: the body is the one
+ * part of a prompt no provider cache can cover, so every character not sent here is a character paid
+ * for at full price, on every article.
+ */
+export const MATERIAL_BODY_CHARS = 2_500;
+
 /** The material as the structure step reads it (source facts, text, link). */
-export function buildMaterial(a: AnalyzeInputArticle): string {
+export function buildMaterial(a: AnalyzeInputArticle, bodyChars = MATERIAL_BODY_CHARS): string {
   const lines: string[] = [];
   lines.push("<source>");
   lines.push(`名称：${a.source.name}`);
@@ -91,8 +99,8 @@ export function buildMaterial(a: AnalyzeInputArticle): string {
   } else {
     lines.push(`标题：${collapseWhitespace(a.title)}`);
     const body = a.bodyText ?? a.excerpt ?? "";
-    lines.push(body ? `正文：\n${truncate(body, 7000)}` : "正文：（无）");
-    if (a.translationZh && !a.bodyText) lines.push(`正文中文译文：\n${truncate(a.translationZh, 5000)}`);
+    lines.push(body ? `正文：\n${truncate(body, bodyChars)}` : "正文：（无）");
+    if (a.translationZh && !a.bodyText) lines.push(`正文中文译文：\n${truncate(a.translationZh, Math.min(bodyChars, 5000))}`);
   }
   lines.push(`原文链接：${a.url}`);
   lines.push("</material>");

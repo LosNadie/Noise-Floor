@@ -106,7 +106,10 @@ export async function processArticle(articleId: string, opts: { attemptTag?: str
     return { state: "skipped" };
   }
   try {
-    const result = await analyzeArticle(articleId, { attemptTag: opts.attemptTag });
+    // History is archived with a summary only: it founds no event and never reaches the front page, so
+    // the prefilter, the scores, the structure step and the image have nothing to decide. An explicit
+    // re-evaluation (attemptTag) is a human asking for a second look and gets the full judgement.
+    const result = await analyzeArticle(articleId, { attemptTag: opts.attemptTag, archive: row.historical && !opts.attemptTag });
     if (!result) return { state: "missing" };
     // Only a title or a feed summary: the article page first; extraction queues the analysis again.
     if (result.needsBody || !result.output) {

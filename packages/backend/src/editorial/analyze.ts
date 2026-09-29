@@ -21,7 +21,7 @@ import { buildMaterial, firstImagePart, loadAnalyzeInput, type AnalyzeInputArtic
 import { pageFetchable } from "../content/extract.ts";
 import { shutdownSignal } from "../jobs/queue.ts";
 import {
-  buildArticlePrompt, buildLongTweetPrompt, buildShortTweetPrompt, finalizeCopy, isShortTweetInput, looksZh, MAX_BODY_CHARS, missingEvidence,
+  buildArticlePrompt, buildLongTweetPrompt, buildShortTweetPrompt, finalizeCopy, isShortTweetInput, looksZh, missingEvidence,
   needsShortTweetTranslation, parseTranslateOutput, PREFILTER_SYSTEM, prefilterUser, translateInputOf, UNDERSTAND_SYSTEM, understandUser,
   type IdentityGuard,
 } from "./writing.ts";
@@ -81,6 +81,14 @@ export function scoreInputTime(at: Date): string {
 }
 
 /**
+ * How much body the score step reads. Two independent score calls run on every article, which makes
+ * this the largest single line on the model bill; the opening of a news story carries the subject, the
+ * action and the stage, which is what the five axes are read off. The body is also the one part of a
+ * prompt no provider cache can cover, so this is the cut that lands on full-price tokens.
+ */
+export const SCORE_BODY_CHARS = 2_500;
+
+/**
  * The score input: no source facts (the prompt forbids guessing them), the publication time, the
  * original title (items are scored before any Chinese copy exists) and the whole body.
  */
@@ -98,7 +106,7 @@ export function buildScoreInput(a: AnalyzeInputArticle): string {
     "请按系统规则评估以下单篇材料所代表的事件。只输出 attentionScore。",
     `【发布时间（北京时间）】\n${at ? scoreInputTime(at) : ""}`,
     `【标题】\n${a.title.trim()}`,
-    `【完整正文】\n${body.length > MAX_BODY_CHARS ? body.slice(0, MAX_BODY_CHARS) : body}`,
+    `【完整正文】\n${body.length > SCORE_BODY_CHARS ? body.slice(0, SCORE_BODY_CHARS) : body}`,
   ].join("\n\n");
 }
 
@@ -151,7 +159,8 @@ const STRUCTURE_SYSTEM = promptText("structure", {
 });
 
 export interface AnalysisRun {
-  prefilter: { label: "PASS" | "BLOCK" | "UNKNOWN"; reason: string; model: string; receiptId: number; reused: boolean };
+  /** `receiptId` is null when no request was made (archived history runs no prefilter). */
+  prefilter: { label: "PASS" | "BLOCK" | "UNKNOWN"; reason: string; model: string; receiptId: number | null; reused: boolean };
   /**
    * The independent score calls and the tier threshold they are held against; absent when the material
    * is not scored. `refused`: the model's content filter declined it, so it is not selected.
@@ -333,6 +342,23 @@ async function runSummarize(a: AnalyzeInputArticle, opts: StepOpts): Promise<Non
 }
 
 /**
+ * History: a new source's first import, or an item already past the stale threshold when it was found.
+ * It is archived with a Chinese title and summary, and that is all — it founds no event, adds no heat
+ * and never reaches the front page (isHistorical in content/materials.ts), so the prefilter, the two
+ * scores, the structure step and the image had nothing to decide. Those four are most of the model
+ * bill, and a source's first import is exactly where a fresh deployment spends its tokens.
+ */
+export async function runArchiveAnalysis(a: AnalyzeInputArticle, opts: StepOpts = {}): Promise<AnalysisRun> {
+  const writing = await runSummarize(a, opts);
+  return {
+    prefilter: { label: "UNKNOWN", reason: "history: archived with a summary only", model: "", receiptId: null, reused: writing.reused },
+    scores: null,
+    writing,
+    structure: null,
+  };
+}
+
+/**
  * Runs the steps on the material as it is (or reuses their receipts) without writing business results.
  * `stages: "selection"` stops after the scores (SelectBench).
  */
@@ -415,17 +441,20 @@ export interface AnalyzeResult {
 /**
  * Analyses the current revision and commits the judgement. A result computed for an older revision
  * is kept for traceability but never overwrites a newer input (stale = true).
+ *
+ * `archive` runs the summary-only path for history (see runArchiveAnalysis). An explicit re-evaluation
+ * from the admin leaves it off, so a human who asks for a second look still gets the full judgement.
  */
-export async function analyzeArticle(articleId: string, opts: StepOpts = {}): Promise<AnalyzeResult | null> {
+export async function analyzeArticle(articleId: string, opts: StepOpts & { archive?: boolean } = {}): Promise<AnalyzeResult | null> {
   const input = await loadAnalyzeInput(articleId);
   if (!input) return null;
   // Its page first; extraction queues the analysis again (normally the queue already routed it there).
   if (waitsForPage(input)) return { analysisId: null, stale: false, needsBody: true, output: null, receiptIds: [], reused: true };
-  const run = await runAnalysis(input, opts);
+  const run = opts.archive ? await runArchiveAnalysis(input, opts) : await runAnalysis(input, opts);
   const out = normalizeAnalysis(run);
   const receiptIds = [
     run.prefilter.receiptId, ...(run.scores?.receiptIds ?? []), ...(run.writing?.receiptIds ?? []), ...(run.structure ? [run.structure.receiptId] : []),
-  ];
+  ].filter((id): id is number => typeof id === "number");
   const w = run.writing;
   const detail = {
     prefilter: { label: run.prefilter.label, reason: run.prefilter.reason },
