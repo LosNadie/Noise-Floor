@@ -17,14 +17,19 @@ export function headers() {
 }
 
 const MCP_VERSION = "2.0.0";
+const SKILL_VERSION = "2.0.0";
 /** The machine-readable entry points, with what each one is for. */
 const RESOURCES: Array<[label: string, href: string, note: string]> = [
   ["llms.txt", "/llms.txt", "给大模型读的站点说明"],
   ["MCP Server", "/api/mcp", "MCP 客户端的连接地址"],
   ["OpenAPI 3.1", "/openapi-v1.json", "REST API v1 的完整定义"],
+  ["SKILL.md", "/aihot-skill/SKILL.md", "Skill 的指令与工作流"],
+  ["install.sh", "/aihot-skill/install.sh", "一键安装脚本"],
+  ["GitHub 仓库", "https://github.com/LosNadie/Noise-Floor", "Skill 包与站点源码"],
 ];
 
 const TABS = [
+  { key: "skill", label: "Agent Skill" },
   { key: "mcp", label: "MCP" },
   { key: "rss", label: "RSS" },
   { key: "api", label: "REST API" },
@@ -41,13 +46,13 @@ export async function loader({ request }: Route.LoaderArgs) {
     healthy = false;
   }
   // The public address the examples show is the configured one, the same on the server and in the browser.
-  return { tab: (TABS.some((t) => t.key === tab) ? tab : "mcp") as TabKey, healthy, base: siteUrl() };
+  return { tab: (TABS.some((t) => t.key === tab) ? tab : "skill") as TabKey, healthy, base: siteUrl() };
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  // Only the tab is part of the address (mcp is the default and not written).
-  const path = listPath("/agent", { tab: loaderData && loaderData.tab !== "mcp" ? loaderData.tab : null });
-  return pageMeta({ title: "Agent 接入", description: `让 Agent 直接使用 ${SITE.name}：MCP、RSS、REST API v1，匿名只读。`, path, image: "/og/pages/agent.png" });
+  // Only the tab is part of the address (skill is the default and not written).
+  const path = listPath("/agent", { tab: loaderData && loaderData.tab !== "skill" ? loaderData.tab : null });
+  return pageMeta({ title: "Agent 接入", description: `让 Agent 直接使用 ${SITE.name}：Agent Skill、MCP、RSS、REST API v1，匿名只读。`, path, image: "/og/pages/agent.png" });
 }
 
 function Section({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
@@ -71,6 +76,47 @@ function Bullets({ items }: { items: ReactNode[] }) {
 
 function Mono({ children }: { children: ReactNode }) {
   return <code className="mono rounded-mark bg-bg-sunk px-1.5 py-0.5 text-[0.88em] text-ink">{children}</code>;
+}
+
+function SkillTab({ base }: { base: string }) {
+  const prompt = `请安装 Noise Floor Skill：${base}/aihot-skill/README.md\n装完告诉我是否需要开启新会话。`;
+  const examples: Array<[string, string]> = [
+    ["最近一周最值得关注的 5 条 AI 资讯是什么？", "原生支持过去 24 小时和最近 7 天"],
+    ["现在 AI 圈最热的事件是什么？", "支持当前热点、分类和 2—200 字关键词"],
+    [`给我今天的${withSubject("日报")}。`, "支持最新、指定日期和日报归档"],
+    ["把 Noise Floor 当前全部精选同步到本地，以后只接收变化。", "首次 snapshot，之后只读取 changes"],
+  ];
+  return (
+    <>
+      <h2 className="text-[20px] font-bold text-ink">装一次，之后直接用中文问</h2>
+      <p className="mt-2 text-[14.5px] text-ink-3">不用记端点也不用写代码。适合 Claude Code、Codex、Gemini CLI 这类支持 Agent Skills 的工具。</p>
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        {[
+          ["01", "把提示词发给 Agent", "安装器不猜平台、不覆盖别家 Skill，发现旧副本会停下来。"],
+          ["02", "开个新会话", "多数 Agent 只在会话开始时扫描 Skill，当前对话不一定看到。"],
+          ["03", "问一句验证", "看到时间窗、中文摘要和站内链接，就算接上了。"],
+        ].map(([n, t, d]) => (
+          <div key={n} className="card p-4">
+            <span className="mono text-[12px] text-ink-4">{n}</span>
+            <p className="mt-1 text-[14.5px] font-semibold text-ink">{t}</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">{d}</p>
+          </div>
+        ))}
+      </div>
+      <CodeBlock title="安装提示词" lang="text" code={prompt} />
+      <p className="text-[13px] text-ink-3">验证问题：<span className="font-medium text-ink">过去 24 小时 AI 圈最重要的 5 件事是什么？</span>成功的样子：回答注明「过去 24 小时」、给出 5 条中文摘要（当天不足就如实说明只有几条），标题链接到站内阅读页。</p>
+      <Section title="装好后能直接这样问">
+        <Bullets items={examples.map(([q, note]) => <><span className="font-medium text-ink">{q}</span>（{note}）</>)} />
+      </Section>
+      <Section title="手动安装">
+        <CodeBlock lang="bash" code={`# 通用 Agent Skills\nbash <(curl -fsSL ${base}/aihot-skill/install.sh) --target agents\n# Claude Code（额外建 ~/.claude/skills 软链）\nbash <(curl -fsSL ${base}/aihot-skill/install.sh) --target claude`} />
+        <Bullets items={[
+          <>安装器按 <Mono>manifest.sha256</Mono> 校验每个文件后再原子换目录；装在 <Mono>~/.agents/skills/noisefloor</Mono>。</>,
+          <>文件清单与校验和：<a href="/aihot-skill/manifest.sha256" className="text-accent hover:underline">manifest.sha256</a>；指令本体：<a href="/aihot-skill/SKILL.md" className="text-accent hover:underline">SKILL.md</a>。</>,
+        ]} />
+      </Section>
+    </>
+  );
 }
 
 function McpTab({ base }: { base: string }) {
@@ -210,11 +256,11 @@ export default function AgentPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>(initialTab);
 
-  useEffect(() => setTab((params.get("tab") as TabKey) || "mcp"), [params]);
+  useEffect(() => setTab((params.get("tab") as TabKey) || "skill"), [params]);
 
   const select = (key: TabKey) => {
     setTab(key);
-    navigate(key === "mcp" ? "/agent" : `/agent?tab=${key}`, { replace: true, preventScrollReset: true });
+    navigate(key === "skill" ? "/agent" : `/agent?tab=${key}`, { replace: true, preventScrollReset: true });
   };
 
   const pill = "inline-flex h-6 items-center rounded-mark border border-line bg-surface px-2 text-[11.5px] text-ink-3";
@@ -245,11 +291,12 @@ export default function AgentPage() {
     <ReadingLayout aside={aside}>
       <header>
         <h1 className="display text-[26px] text-ink">让 Agent 直接使用 {SITE.name}</h1>
-        <p className="mt-1.5 text-[13px] text-ink-3">三条接入路径都是匿名只读、无需 API Key：MCP、RSS、REST API v1。</p>
+        <p className="mt-1.5 text-[13px] text-ink-3">四条接入路径都是匿名只读、无需 API Key：Agent Skill、MCP、RSS、REST API v1。</p>
         <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
           <span className={pill}>匿名只读</span>
           <span className={`${pill} mono`}>API v1</span>
           <span className={`${pill} mono`}>MCP {MCP_VERSION}</span>
+          <span className={`${pill} mono`}>Skill {SKILL_VERSION}</span>
           <span className={`${pill} gap-1.5 ${healthy ? "text-ok" : "text-hot"}`}>
             <span className={`size-1.5 rounded-full ${healthy ? "bg-ok" : "bg-hot"}`} />
             {healthy ? "服务正常" : "服务异常"}
@@ -270,6 +317,7 @@ export default function AgentPage() {
       </div>
 
       <div className="mt-7" role="tabpanel">
+        {tab === "skill" && <SkillTab base={base} />}
         {tab === "mcp" && <McpTab base={base} />}
         {tab === "rss" && <RssTab base={base} />}
         {tab === "api" && <ApiTab base={base} />}

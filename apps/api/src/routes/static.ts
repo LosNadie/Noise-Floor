@@ -152,6 +152,27 @@ export function registerStatic(app: FastifyInstance) {
     app.get(`/${icon}`, (req, reply) => sendFile(req, reply, path.join(BRAND, icon), { cacheControl: "public, max-age=86400, stale-while-revalidate=604800" }));
   }
 
+  // The Agent Skill pack (industry/skill/): the installer downloads these paths by name and verifies
+  // them against manifest.sha256, so the set of served files stays fixed.
+  const SKILL_DIR = path.join(REPO_ROOT, "industry/skill");
+  const SKILL_FILES: Record<string, string> = {
+    "SKILL.md": "text/markdown; charset=utf-8",
+    "README.md": "text/markdown; charset=utf-8",
+    "install.sh": "text/x-shellscript; charset=utf-8",
+    "manifest.sha256": "text/plain; charset=utf-8",
+    "LICENSE": "text/plain; charset=utf-8",
+    "agents/openai.yaml": "text/yaml; charset=utf-8",
+    "references/api.md": "text/markdown; charset=utf-8",
+    "references/sync.md": "text/markdown; charset=utf-8",
+    "references/errors.md": "text/markdown; charset=utf-8",
+  };
+  app.get("/aihot-skill/*", (req, reply) => {
+    const rel = (req.params as { "*": string })["*"];
+    const type = rel ? SKILL_FILES[rel] : undefined;
+    if (!type || rel!.includes("..")) return reply.code(404).type("text/plain; charset=utf-8").send("Not found");
+    return sendFile(req, reply, path.join(SKILL_DIR, rel), { type, cacheControl: "public, max-age=300" });
+  });
+
   if (FEATURES.leaderboard) {
     for (const dir of ["model-providers", "leaderboard-sources"]) {
       app.get(`/${dir}/:file`, (req, reply) => {
