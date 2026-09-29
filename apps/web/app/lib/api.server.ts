@@ -16,9 +16,14 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiGet<T>(path: string, init?: { signal?: AbortSignal; headers?: Record<string, string>; responseHeaders?: Headers }): Promise<T> {
+/** The reader's own cookie, forwarded so gated api endpoints see the session the gate already verified. */
+export function cookieOf(request: Request): string | undefined {
+  return request.headers.get("cookie") ?? undefined;
+}
+
+export async function apiGet<T>(path: string, init?: { signal?: AbortSignal; headers?: Record<string, string>; responseHeaders?: Headers; cookie?: string }): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { accept: "application/json", "x-aihot-ssr": "1", ...init?.headers },
+    headers: { accept: "application/json", "x-aihot-ssr": "1", ...(init?.cookie ? { cookie: init.cookie } : {}), ...init?.headers },
     signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
   });
   if (!res.ok) {
@@ -36,12 +41,15 @@ export async function apiGet<T>(path: string, init?: { signal?: AbortSignal; hea
 }
 
 /** Maps API failures to route responses: real 404s, search-busy page, otherwise 503. */
-export async function loadOr404<T>(path: string, opts: { busyRedirect?: string; responseHeaders?: Headers; signal?: AbortSignal } = {}): Promise<T> {
+export async function loadOr404<T>(path: string, opts: { busyRedirect?: string; responseHeaders?: Headers; signal?: AbortSignal; cookie?: string } = {}): Promise<T> {
   try {
-    return await apiGet<T>(path, { responseHeaders: opts.responseHeaders, signal: opts.signal });
+    return await apiGet<T>(path, { responseHeaders: opts.responseHeaders, signal: opts.signal, cookie: opts.cookie });
   } catch (error) {
     if (opts.signal?.aborted) throw error;
     if (error instanceof ApiError) {
+      // The session expired mid-visit (or a loader forgot to forward the cookie): re-enter through
+      // sign-in rather than showing the reader a "service busy" page for an auth problem.
+      if (error.status === 401) throw redirect("/login");
       if (error.status === 404) throw data({ message: "not_found" }, { status: 404 });
       if (error.status === 503 && opts.busyRedirect) throw redirect(opts.busyRedirect);
       if (error.status === 400) throw data({ message: "bad_request" }, { status: 400 });

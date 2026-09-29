@@ -2,7 +2,7 @@ import { SITE, withSubject } from "@aihot/industry/site";
 import { Link, data, useLoaderData } from "react-router";
 import type { Route } from "./+types/leaderboard";
 import type { LbBoardResponse } from "@aihot/contracts/leaderboard";
-import { loadOr404 } from "../lib/api.server";
+import { loadOr404, cookieOf } from "../lib/api.server";
 import { breadcrumbLd, pageMeta, siteUrl, titled } from "../lib/seo";
 import { BoardTable } from "../features/leaderboard/BoardTable";
 import { Podium } from "../features/leaderboard/Podium";
@@ -15,7 +15,7 @@ const CATEGORY_KEYS = new Set(["coding", "reasoning", "knowledge", "professional
 export async function loader({ params, request }: Route.LoaderArgs) {
   const key = params.key ?? "overall";
   if (params.key !== undefined && !CATEGORY_KEYS.has(params.key)) throw data({ message: "not_found" }, { status: 404 });
-  return loadOr404<LbBoardResponse>(`/api/site/leaderboard/boards/${key}`, { signal: request.signal });
+  return loadOr404<LbBoardResponse>(`/api/site/leaderboard/boards/${key}`, { cookie: cookieOf(request), signal: request.signal });
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {

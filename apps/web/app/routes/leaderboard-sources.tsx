@@ -1,7 +1,7 @@
 import { SITE, withSubject } from "@aihot/industry/site";
 import { Link, useLoaderData } from "react-router";
 import type { LbSourcesResponse } from "@aihot/contracts/leaderboard";
-import { loadOr404 } from "../lib/api.server";
+import { loadOr404, cookieOf } from "../lib/api.server";
 import { breadcrumbLd, pageMeta } from "../lib/seo";
 import { BrandMark } from "../features/leaderboard/BrandMark";
 import { StatusChip } from "../features/leaderboard/StatusChip";
@@ -9,7 +9,7 @@ import { pct } from "../features/leaderboard/format";
 import { IconArrowLeft, IconArrowUpRight } from "../components/icons";
 
 export async function loader({ request }: { request: Request }) {
-  return loadOr404<LbSourcesResponse>("/api/site/leaderboard/sources", { signal: request.signal });
+  return loadOr404<LbSourcesResponse>("/api/site/leaderboard/sources", { cookie: cookieOf(request), signal: request.signal });
 }
 
 export function meta() {

@@ -1,7 +1,7 @@
 import { SITE, withSubject } from "@aihot/industry/site";
 import { Fragment, useEffect, useState } from "react";
 import { Link, useLoaderData } from "react-router";
-import { apiGet } from "../lib/api.server";
+import { apiGet, cookieOf } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 import { setChangelogSeen } from "../lib/local-state";
 import { AsideCard, ReadingLayout } from "../components/ui/Page";
@@ -22,7 +22,7 @@ interface Release {
 }
 
 export async function loader({ request }: { request: Request }) {
-  return apiGet<{ latestVersion: string; releases: Release[] }>("/api/site/changelog", { signal: request.signal });
+  return apiGet<{ latestVersion: string; releases: Release[] }>("/api/site/changelog", { cookie: cookieOf(request), signal: request.signal });
 }
 
 export function meta() {

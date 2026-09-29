@@ -1,7 +1,7 @@
 import { SITE, withSubject } from "@aihot/industry/site";
 import { Link, useLoaderData } from "react-router";
 import type { HotEntryView, HotResponse } from "@aihot/contracts/site";
-import { loadOr404 } from "../lib/api.server";
+import { loadOr404, cookieOf } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 import { monthDayTime, shortSourceName } from "../lib/format";
 import { Badge } from "../components/ui/Badge";
@@ -12,7 +12,7 @@ import { Faces } from "../features/hot/Faces";
 import { Delta } from "../features/hot/Delta";
 
 export async function loader({ request }: { request: Request }) {
-  return { hot: await loadOr404<HotResponse>("/api/site/hot", { signal: request.signal }) };
+  return { hot: await loadOr404<HotResponse>("/api/site/hot", { cookie: cookieOf(request), signal: request.signal }) };
 }
 
 export function meta() {

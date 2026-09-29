@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLoaderData } from "react-router";
 import type { SiteStats } from "@aihot/contracts/site";
-import { apiGet } from "../lib/api.server";
+import { apiGet, cookieOf } from "../lib/api.server";
 import { shortSourceName } from "../lib/format";
 import { ABOUT, SITE, withSubject } from "@aihot/industry/site";
 import { organizationLd, pageMeta } from "../lib/seo";
@@ -24,8 +24,8 @@ interface ContactSettings {
 
 export async function loader({ request }: { request: Request }) {
   const [contact, stats] = await Promise.all([
-    apiGet<ContactSettings>("/api/site/contact", { signal: request.signal }).catch((): ContactSettings => ({ wechatQr: null, feishuQr: null, makerAvatar: null })),
-    apiGet<SiteStats>("/api/site/stats", { signal: request.signal }).catch(() => null),
+    apiGet<ContactSettings>("/api/site/contact", { cookie: cookieOf(request), signal: request.signal }).catch((): ContactSettings => ({ wechatQr: null, feishuQr: null, makerAvatar: null })),
+    apiGet<SiteStats>("/api/site/stats", { cookie: cookieOf(request), signal: request.signal }).catch(() => null),
   ]);
   return { contact, stats };
 }

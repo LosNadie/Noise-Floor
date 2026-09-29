@@ -1,5 +1,5 @@
 import { Link, useLoaderData } from "react-router";
-import { apiGet } from "../lib/api.server";
+import { apiGet, cookieOf } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 
 interface TopicSummary {
@@ -14,7 +14,7 @@ interface TopicSummary {
 }
 
 export async function loader({ request }: { request: Request }) {
-  return apiGet<{ topics: TopicSummary[] }>("/api/site/topics", { signal: request.signal });
+  return apiGet<{ topics: TopicSummary[] }>("/api/site/topics", { cookie: cookieOf(request), signal: request.signal });
 }
 
 export function meta() {

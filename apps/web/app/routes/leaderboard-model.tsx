@@ -5,7 +5,7 @@ import { Collapse } from "../components/ui/Presence";
 import type { Route } from "./+types/leaderboard-model";
 import type { LbComparison, LbEvidenceItem, LbModelDetail } from "@aihot/contracts/leaderboard";
 import { LEADERBOARD_BOARD_LABELS, LEADERBOARD_PUBLIC_BOARDS } from "@aihot/contracts/taxonomy";
-import { loadOr404 } from "../lib/api.server";
+import { loadOr404, cookieOf } from "../lib/api.server";
 import { breadcrumbLd, pageMeta, siteUrl, titled } from "../lib/seo";
 import { BrandMark } from "../features/leaderboard/BrandMark";
 import { EvidenceBadge } from "../features/leaderboard/Evidence";
@@ -13,7 +13,7 @@ import { boardHref, listPrice, pctFixed, shortStamp, tokensWan, yuan } from "../
 import { IconArrowLeft, IconArrowRight, IconArrowUpRight, IconChevronDown, IconExternal } from "../components/icons";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
-  return loadOr404<LbModelDetail>(`/api/site/leaderboard/models/${encodeURIComponent(params.slug)}`, { signal: request.signal });
+  return loadOr404<LbModelDetail>(`/api/site/leaderboard/models/${encodeURIComponent(params.slug)}`, { cookie: cookieOf(request), signal: request.signal });
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {

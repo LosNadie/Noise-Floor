@@ -2,7 +2,7 @@ import { SITE, withSubject } from "@aihot/industry/site";
 import { useEffect, useState } from "react";
 import { useLoaderData, useRevalidator } from "react-router";
 import type { CodexResetEvent, CodexResetSitePage, CodexResetDay } from "@aihot/contracts/monitor";
-import { loadOr404 } from "../lib/api.server";
+import { loadOr404, cookieOf } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 import { PostCard } from "../features/monitor/PostCard";
 import { ResetCalendar } from "../features/monitor/ResetCalendar";
@@ -12,8 +12,8 @@ import { useEntrance } from "../lib/hydration";
 
 export async function loader({ request, params }: { request: Request; params: { date?: string } }) {
   const [data, day] = await Promise.all([
-    loadOr404<CodexResetSitePage>("/api/site/codex-reset", { signal: request.signal }),
-    params.date ? loadOr404<CodexResetDay>(`/api/site/codex-reset/days/${encodeURIComponent(params.date)}`, { signal: request.signal }) : null,
+    loadOr404<CodexResetSitePage>("/api/site/codex-reset", { cookie: cookieOf(request), signal: request.signal }),
+    params.date ? loadOr404<CodexResetDay>(`/api/site/codex-reset/days/${encodeURIComponent(params.date)}`, { cookie: cookieOf(request), signal: request.signal }) : null,
   ]);
   return { ...data, ...(day ? { selectedDate: day.date, events: day.events } : {}), serverNow: Date.now() };
 }

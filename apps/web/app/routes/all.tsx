@@ -3,7 +3,7 @@ import { Link, useLoaderData, useNavigation, useSearchParams } from "react-route
 import type { Route } from "./+types/all";
 import type { PoolResponse } from "@aihot/contracts/site";
 import { isCategoryKey, isChannelKey } from "@aihot/contracts/taxonomy";
-import { loadOr404, queryString } from "../lib/api.server";
+import { loadOr404, queryString, cookieOf } from "../lib/api.server";
 import { listPath, pageMeta } from "../lib/seo";
 import { CategoryTabs, SearchField } from "../features/feed/Filters";
 import { PillTabs } from "../components/ui/Tabs";
@@ -24,7 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const page = Math.min(Math.max(Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1, 1), 50);
   const data = await loadOr404<PoolResponse>(
     `/api/site/pool${queryString({ channel: channel === "all" ? null : channel, category, tag, q, tab, page: page > 1 ? page : null })}`,
-    { signal: request.signal, busyRedirect: "/all/search-busy" },
+    { cookie: cookieOf(request), signal: request.signal, busyRedirect: "/all/search-busy" },
   );
   return { data };
 }

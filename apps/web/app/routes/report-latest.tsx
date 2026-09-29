@@ -2,7 +2,7 @@ import { SITE, withSubject } from "@aihot/industry/site";
 import { useLoaderData } from "react-router";
 import type { Route } from "./+types/report-latest";
 import type { ReportDetail, ReportNavigationEntry } from "@aihot/contracts/site";
-import { loadOr404 } from "../lib/api.server";
+import { loadOr404, cookieOf } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 import { beijingDate } from "../lib/format";
 import { EmptyState } from "../components/ui/Page";
@@ -12,7 +12,7 @@ import { KIND_LABEL, kindFromPath } from "../features/report/format";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const kind = kindFromPath(new URL(request.url).pathname);
-  const { index, report } = await loadOr404<{ index: ReportNavigationEntry[]; report: ReportDetail | null }>(`/api/site/reports/${kind}/latest-page`, { signal: request.signal });
+  const { index, report } = await loadOr404<{ index: ReportNavigationEntry[]; report: ReportDetail | null }>(`/api/site/reports/${kind}/latest-page`, { cookie: cookieOf(request), signal: request.signal });
   return { kind, report, index, today: beijingDate(Date.now()) };
 }
 

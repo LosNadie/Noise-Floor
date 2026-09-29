@@ -3,7 +3,7 @@
 import { SITE, withSubject } from "@aihot/industry/site";
 import { Link, useLoaderData } from "react-router";
 import type { LbRunInfo } from "@aihot/contracts/leaderboard";
-import { loadOr404 } from "../lib/api.server";
+import { loadOr404, cookieOf } from "../lib/api.server";
 import { breadcrumbLd, pageMeta } from "../lib/seo";
 import { pct } from "../features/leaderboard/format";
 import { fullDateTime } from "../lib/format";
@@ -17,7 +17,7 @@ interface RulesData {
 }
 
 export async function loader({ request }: { request: Request }) {
-  return loadOr404<RulesData>("/api/site/leaderboard/rules", { signal: request.signal });
+  return loadOr404<RulesData>("/api/site/leaderboard/rules", { cookie: cookieOf(request), signal: request.signal });
 }
 
 export function meta() {

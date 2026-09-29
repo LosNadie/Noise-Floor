@@ -13,7 +13,7 @@ import { BackToTop, NavigationProgress } from "./components/shell/Chrome";
 import { RingMark } from "./components/Logo";
 import { buttonClass } from "./components/ui/Controls";
 import { THEME_BOOT_SCRIPT } from "./lib/local-state";
-import { apiGet } from "./lib/api.server";
+import { apiGet, cookieOf } from "./lib/api.server";
 import { readerOf, type Reader } from "./lib/reader.server";
 import { useHydratedFlag } from "./lib/hydration";
 
@@ -34,7 +34,7 @@ interface SiteMeta {
 export async function loader({ request }: Route.LoaderArgs) {
   const reader = readerOf(request);
   try {
-    return { ...(await apiGet<{ changelogVersion: string | null }>("/api/site/meta", { signal: request.signal })), reader };
+    return { ...(await apiGet<{ changelogVersion: string | null }>("/api/site/meta", { cookie: cookieOf(request), signal: request.signal })), reader };
   } catch {
     return { changelogVersion: null, reader } satisfies SiteMeta;
   }

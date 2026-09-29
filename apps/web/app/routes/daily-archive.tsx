@@ -1,7 +1,7 @@
 import { SITE, withSubject } from "@aihot/industry/site";
 import { Link, useLoaderData } from "react-router";
 import type { ReportIndexEntry } from "@aihot/contracts/site";
-import { apiGet } from "../lib/api.server";
+import { apiGet, cookieOf } from "../lib/api.server";
 import { pageMeta } from "../lib/seo";
 import { beijingDate, beijingWeekday } from "../lib/format";
 import { ReportLayout } from "../features/report/ReportLayout";
@@ -10,7 +10,7 @@ import { Rows, SectionPage } from "../features/report/ReportPaper";
 import { Nameplate } from "../features/report/Nameplate";
 
 export async function loader({ request }: { request: Request }) {
-  const { items: index } = await apiGet<{ items: ReportIndexEntry[] }>("/api/site/reports/daily", { signal: request.signal });
+  const { items: index } = await apiGet<{ items: ReportIndexEntry[] }>("/api/site/reports/daily", { cookie: cookieOf(request), signal: request.signal });
   return { index, today: beijingDate(Date.now()) };
 }
 
