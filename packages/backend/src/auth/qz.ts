@@ -201,3 +201,53 @@ export async function qzUserInfo(accessToken: string, qUid: string): Promise<QzU
     isConnectedAgent: data.is_connected_agent === true,
   };
 }
+
+// ===== Message push (server → reader, via the app credential) =====
+//
+// The daily subscription digest and anything else that reaches a reader through Q助理 goes out
+// under the application's own token (client_credentials), not a reader token: a push targets a
+// q_uid the app is allowed to write to, as long as that reader authorized the app and connected
+// the agent.
+
+interface AppTokenCache {
+  value: string;
+  expiresAt: number;
+}
+
+let appToken: AppTokenCache | null = null;
+
+/** The app-level credential, held in memory until shortly before it expires. */
+export async function qzAppToken(): Promise<string> {
+  if (appToken && appToken.expiresAt > Date.now() + 60_000) return appToken.value;
+  const secret = appSecret();
+  if (!secret) throw new QzError("还没有配置 Q助理 的 AppSecret");
+  const data = await qzPost<TokenData>(TOKEN_PATH, { app_secret: secret, grant_type: "client_credentials" });
+  if (!data.access_token || !data.expires_in) throw new QzError("Q助理 没有返回应用凭证");
+  appToken = { value: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+  return appToken.value;
+}
+
+export interface QzPushInput {
+  qUid: string;
+  title: string;
+  message: string;
+  /** Where tapping the message lands; defaults to the platform's own message view. */
+  url?: string;
+  /** Business idempotency id (1–64 of A-Z a-z 0-9 . _ ~ -). Same id with the same content retries safely. */
+  messageId: string;
+  importance?: 1 | 2 | 3;
+}
+
+/** Sends one message to one reader. Throws QzError; the caller decides how a failure is recorded. */
+export async function qzPushMessage(input: QzPushInput): Promise<void> {
+  const token = await qzAppToken();
+  await qzPost("/open/message/push", {
+    q_uid: input.qUid,
+    title: input.title,
+    message: input.message,
+    ...(input.url ? { url: input.url } : {}),
+    message_id: input.messageId,
+    ...(input.importance ? { message_importance: input.importance } : {}),
+  }, token);
+}
+

@@ -10,6 +10,7 @@ import { registerLeaderboard } from "./routes/leaderboard.ts";
 import { registerOg } from "./routes/og.ts";
 import { registerAdminAuth } from "./routes/admin-auth.ts";
 import { registerQzAuth } from "./routes/qz-auth.ts";
+import { registerQzSubscription } from "./routes/qz-subscription.ts";
 import { registerAdmin } from "./routes/admin.ts";
 import { registerIngest } from "./routes/ingest.ts";
 import { registerV1, registerV1Fallbacks } from "./routes/v1.ts";
@@ -98,6 +99,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOg(app);
   registerAdminAuth(app);
   registerQzAuth(app);
+  registerQzSubscription(app);
   registerAdmin(app);
 
   registerIngest(app);

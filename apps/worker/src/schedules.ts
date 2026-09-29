@@ -25,6 +25,7 @@ import { backupConfigured, runBackup } from "@aihot/backend/operations/backup";
 import { sourceHealthWeekly } from "@aihot/backend/operations/reports";
 import { markStalePendingReceipts } from "@aihot/backend/providers/receipts";
 import { markStaleDeliveries } from "@aihot/backend/notify/deliver";
+import { runQzSubscriptionDigest } from "@aihot/backend/notify/qz-digest";
 
 interface Scheduled {
   name: string;
@@ -94,6 +95,8 @@ export const SCHEDULES: Scheduled[] = [
         { name: "monitor.lookback", cron: "40 4 * * *", run: () => monitorTick({ lookbackHours: 48 }) },
       ]
     : []),
+  // The daily Q助理 digest for topic subscribers: one personal message per opted-in reader.
+  { name: "qz.subscription.digest", cron: "30 8 * * *", missed: "once" as const, run: () => runQzSubscriptionDigest() },
 ];
 
 export async function registerSchedules(boss: PgBoss) {

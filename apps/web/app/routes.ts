@@ -25,6 +25,7 @@ export default [
   route("privacy", "routes/privacy.tsx"),
   route("changelog", "routes/changelog.tsx"),
   route("feedback", "routes/feedback.tsx"),
+  route("subscriptions", "routes/subscriptions.tsx"),
   route("more", "routes/more.tsx"),
   route("starred", "routes/starred.tsx"),
   route("agent", "routes/agent.tsx"),
