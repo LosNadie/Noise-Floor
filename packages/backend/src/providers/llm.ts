@@ -160,7 +160,12 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
   if (!baseUrl || !apiKey || !spec.model) throw new Error(`Model ${opts.model} is not configured (${spec.baseUrlEnv}, ${spec.apiKeyEnv}${spec.key === "default" ? ", LLM_MODEL" : ""})`);
 
   const temperature = opts.temperature ?? 0.2;
-  const maxTokens = Math.max(opts.maxTokens ?? 1500, 512) + (spec.key.endsWith("-think") ? 4000 : 0);
+  // Models that reason on every call (the -think presets, GLM 5.3 Flash which always thinks) burn
+  // the same max_tokens budget on invisible reasoning: without headroom the answer is cut off
+  // mid-thought and the structured output never starts. Thinking is on unless a spec turns it off.
+  const thinking = (spec.extra as { thinking?: { type?: string; level?: string } } | undefined)?.thinking;
+  const thinkingOn = !!thinking && thinking.type !== "disabled";
+  const maxTokens = Math.max(opts.maxTokens ?? 1500, 512) + (spec.key.endsWith("-think") || thinkingOn ? 4000 : 0);
   const userText = typeof opts.user === "string" ? opts.user : JSON.stringify(opts.user);
   const body: Record<string, unknown> = {
     model: spec.model,
