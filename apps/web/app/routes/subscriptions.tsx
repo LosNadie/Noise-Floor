@@ -42,6 +42,8 @@ export default function SubscriptionsPage() {
   const [state, setState] = useState<SubscriptionState | null>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "saving" | "saved" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
+  const [pushPhase, setPushPhase] = useState<"idle" | "pushing" | "pushed" | "push-error">("idle");
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -104,6 +106,30 @@ export default function SubscriptionsPage() {
   const byGroup = (grp: string) => topics.filter((t) => t.group === grp);
   const dirty = phase === "ready" || phase === "error";
   const atLimit = state ? state.topics.length >= MAX_TOPICS : false;
+
+  // Push the current digest through Q助理 right away; the api says a rejection in the reader's language.
+  const pushNow = async () => {
+    if (pushPhase === "pushing") return;
+    setPushPhase("pushing");
+    setPushMessage(null);
+    try {
+      const res = await fetch("/api/me/subscription/push", { method: "POST" });
+      if (res.ok) {
+        const body = (await res.json()) as { items?: number };
+        setPushPhase("pushed");
+        setPushMessage(`已推送 ${body.items ?? 0} 条到 Q助理`);
+        setTimeout(() => setPushPhase("idle"), 2500);
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { detail?: string } | null;
+      setPushPhase("push-error");
+      setPushMessage(body?.detail ?? "推送失败，请稍后再试。");
+    } catch (e) {
+      setPushPhase("push-error");
+      setPushMessage(String((e as Error).message ?? e));
+    }
+  };
+  const pushDisabled = pushPhase === "pushing" || !state?.enabled;
 
   return (
     <div className="mx-auto max-w-[var(--page-max-reading)] pb-10">
@@ -173,16 +199,27 @@ export default function SubscriptionsPage() {
             </span>
           </label>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={save}
-              disabled={!dirty || phase === "saving" || (state.enabled && state.topics.length === 0)}
+              disabled={!dirty || (state.enabled && state.topics.length === 0)}
               className={buttonClass("primary")}
             >
               {phase === "saving" ? "保存中…" : phase === "saved" ? "已保存 ✓" : "保存订阅设置"}
             </button>
-            <span className="text-[12.5px] text-ink-3">推送在 Q助理 App 内收到，需已完成数字员工连接。</span>
+            <button
+              type="button"
+              onClick={pushNow}
+              disabled={pushDisabled}
+              className={buttonClass("secondary")}
+            >
+              {pushPhase === "pushing" ? "推送中…" : pushPhase === "pushed" ? "已推送 ✓" : "立即推送"}
+            </button>
+            {pushMessage && (
+              <span className={`text-[12.5px] ${pushPhase === "push-error" ? "text-red-500" : "text-ink-3"}`}>{pushMessage}</span>
+            )}
+            {!pushMessage && <span className="text-[12.5px] text-ink-3">推送在 Q助理 App 内收到，需已完成数字员工连接。</span>}
           </div>
         </div>
       )}

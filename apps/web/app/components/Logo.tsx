@@ -12,7 +12,6 @@ export function BrandMark({ size = 24, className = "" }: { size?: number; classN
   return (
     <span
       aria-hidden="true"
-      focusable="false"
       className={`inline-block shrink-0 ${className}`}
       style={{
         width,
