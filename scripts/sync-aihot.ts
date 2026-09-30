@@ -7,8 +7,12 @@
 // Idempotent end to end — safe to rerun after a failed/partial run.
 // Env: WINDOW (default 24h), MAX_ITEMS (0 = all, smoke testing), DELAY_MS (default 350), UA.
 import postgres from "postgres";
+import { z } from "zod";
 import { identityKeyForUrl } from "/app/packages/backend/src/lib/url.ts";
 import { publishArticle, publishArticleTx } from "/app/packages/backend/src/publication/publish.ts";
+import { modelFor } from "/app/packages/backend/src/editorial/models.ts";
+import { chatJson } from "/app/packages/backend/src/providers/llm.ts";
+import { enqueue, QUEUES } from "/app/packages/backend/src/jobs/queue.ts";
 
 const SOURCE_ID = "external-aihot";
 const WINDOW = process.env.WINDOW || "24h";
@@ -214,6 +218,7 @@ let selectedCount = 0;
 let errors = 0;
 const errorList: string[] = [];
 const importedIds: string[] = [];
+const selectedIds: string[] = [];
 
 for (const item of items) {
   try {
@@ -260,6 +265,7 @@ for (const item of items) {
     imported++;
     importedIds.push(articleId);
     if (outcome && outcome.selected) selectedCount++;
+    if (outcome && outcome.selected) selectedIds.push(articleId);
   } catch (err) {
     errors++;
     errorList.push(`${item.id}: ${(err as Error).message}`);
@@ -327,6 +333,69 @@ if (withBody.length) {
   }
   console.log(`republish done: changed=${changed}/${withBody.length}`);
   if (republishErrors.length) console.log(`republish failures (first 10):\n${republishErrors.slice(0, 10).join("\n")}`);
+}
+
+// ---- step 4: selected items get topic tags (one small model call each) + event grouping ----
+// Topic pages (/topics) count only selected publications and match on publications.tags
+// (analyses.tags ∪ entity:subjects). The upstream API carries no tags, so each selected item
+// gets one lightweight "structure" call to pick 0-3 topic slugs; the matching keys of those
+// topics are written to analyses.tags and republished. Items are then handed to the event
+// grouping queue (embedding recall + confirm) so story pages keep living. A few dozen small
+// calls per day at an 8h cadence — bounded by how many items the upstream selects.
+
+if (true) { // always run: the self-heal query below picks up untagged selected items from past runs too
+  // Self-heal: also pick up previously imported selected items that never got tags
+  // (dedup anchor: the receipt written by this very step) and items not yet grouped.
+  const staleTaggable = await sql<{ article_id: string }[]>`
+    SELECT a.article_id FROM analyses a JOIN articles ar ON ar.id = a.article_id
+    WHERE ar.source_id = ${SOURCE_ID} AND a.selected AND a.origin = 'replay'
+      AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.purpose = 'structure_article' AND r.subject = 'sync-tags:' || a.article_id)`;
+  const taggableIds = [...new Set([...selectedIds, ...staleTaggable.map((r) => r.article_id)])];
+  const topics = await sql<{ slug: string; name: string; tags: string[]; entity_id: string | null }[]>`
+    SELECT slug, name, tags, entity_id FROM topics ORDER BY position`;
+  const keysBySlug = new Map(topics.map((t) => [t.slug, [...new Set([...t.tags, ...(t.entity_id ? [`entity:${t.entity_id}`] : [])])]]));
+  const catalog = topics.map((t) => `${t.slug} | ${t.name}`).join("\n");
+  const TagSchema = z.object({ topics: z.array(z.string()).max(3) });
+  const model = await modelFor("structure");
+  let tagged = 0;
+  let queued = 0;
+  const tagErrors: string[] = [];
+  for (const id of taggableIds) {
+    try {
+      const [row] = await sql<{ title: string; summary: string | null }[]>`
+        SELECT title_zh AS title, summary_zh AS summary FROM analyses WHERE article_id = ${id} AND input_revision = 1`;
+      if (row) {
+        const res = await chatJson({
+          model,
+          purpose: "structure_article",
+          subject: `sync-tags:${id}`,
+          promptVersion: "sync-topics-1",
+          system: "你是科技媒体的标签编辑。根据文章标题和摘要，从候选专题中挑出文章实质所属的专题，最多 3 个。只选文章核心主题真正属于的专题，宁可少选或不选。",
+          user: `标题：${row.title}\n摘要：${row.summary ?? "（无）"}\n\n候选专题（每行：slug | 名称）：\n${catalog}\n\n输出 JSON：{"topics": ["slug", ...]}`,
+          schema: TagSchema,
+          temperature: 0,
+          maxTokens: 120,
+        });
+        const slugs = (res.data?.topics ?? []).filter((s) => keysBySlug.has(s)).slice(0, 3);
+        const keys = [...new Set(slugs.flatMap((s) => keysBySlug.get(s)!))];
+        if (keys.length) {
+          await sql`UPDATE analyses SET tags = ${keys}::text[] WHERE article_id = ${id} AND input_revision = 1`;
+          await publishArticle(id);
+          tagged++;
+        }
+      }
+      const [grouped] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM grouping_decisions WHERE article_id = ${id}`;
+      if (grouped.n === 0) {
+        await enqueue(QUEUES.group, { articleId: id }, { singletonKey: id });
+        queued++;
+      }
+    } catch (err) {
+      tagErrors.push(`${id}: ${(err as Error).message}`);
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  console.log(`selected tagging done: tagged=${tagged} grouped(queued)=${queued}/${taggableIds.length}`);
+  if (tagErrors.length) console.log(`tagging failures (first 10):\n${tagErrors.slice(0, 10).join("\n")}`);
 }
 console.log(`[${new Date().toISOString()}] sync finished`);
 await sql.end();
