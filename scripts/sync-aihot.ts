@@ -7,6 +7,7 @@
 // Idempotent end to end — safe to rerun after a failed/partial run.
 // Env: WINDOW (default 24h), MAX_ITEMS (0 = all, smoke testing), DELAY_MS (default 350), UA.
 import postgres from "postgres";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { identityKeyForUrl } from "/app/packages/backend/src/lib/url.ts";
 import { publishArticle, publishArticleTx } from "/app/packages/backend/src/publication/publish.ts";
@@ -14,7 +15,8 @@ import { modelFor } from "/app/packages/backend/src/editorial/models.ts";
 import { chatJson } from "/app/packages/backend/src/providers/llm.ts";
 import { enqueue, QUEUES } from "/app/packages/backend/src/jobs/queue.ts";
 
-const SOURCE_ID = "external-aihot";
+const SOURCE_ID = "external-aihot"; // legacy aggregate row, kept for old references
+const SOURCE_PREFIX = "aihot-s-"; // per-upstream-source rows: id = SOURCE_PREFIX + md5(name).slice(0, 10)
 const WINDOW = process.env.WINDOW || "24h";
 const MAX_ITEMS = Number(process.env.MAX_ITEMS || 0);
 const DELAY = Number(process.env.DELAY_MS || 350);
@@ -187,7 +189,7 @@ const BODY_HEADER = /^## 正文(?:\s*·\s*(?:原文|AI 翻译))?\s*$/m;
 
 const stale = await sql<{ article_id: string }[]>`
   SELECT p.article_id FROM publications p JOIN articles a ON a.id = p.article_id
-  WHERE a.source_id = ${SOURCE_ID} AND a.body_status = 'ok' AND p.body_mode <> 'full'`;
+  WHERE a.source_id LIKE ${SOURCE_PREFIX + "%"} AND a.body_status = 'ok' AND p.body_mode <> 'full'`;
 if (stale.length) {
   let fixed = 0;
   for (const row of stale) {
@@ -204,13 +206,6 @@ if (stale.length) {
 const all = await fetchAll();
 const items = MAX_ITEMS > 0 ? all.slice(0, MAX_ITEMS) : all;
 console.log(`[${new Date().toISOString()}] fetched ${all.length} items from aihot.news (${WINDOW} window), importing ${items.length}`);
-
-await sql`
-  INSERT INTO sources (id, name, kind, tier, participation_mode, config, tags, first_party,
-    site_fulltext, syndicate_fulltext, enabled, health, imported_from, next_fetch_at)
-  VALUES (${SOURCE_ID}, ${"AIHOT 精选转载"}, 'external', 'T2', 'editorial', '{}'::jsonb, '{}'::text[], false,
-    true, false, true, 'ok', 'https://aihot.news', now() + interval '3650 days')
-  ON CONFLICT (id) DO NOTHING`;
 
 let imported = 0;
 let dup = 0;
@@ -237,15 +232,22 @@ for (const item of items) {
     // analyses.title_zh carries the Chinese title the card shows.
     const articleTitle = (item.originalTitle ?? item.title).trim();
     const raw = { aihot: item, importedFrom: "https://aihot.news", importNote: `sync ${WINDOW} replay` };
+    // One source row per upstream source, so cards/detail show the same attribution aihot does.
+    const srcName = (item.source?.name ?? "").trim() || "AIHOT 精选转载";
+    const srcId = `${SOURCE_PREFIX}${createHash("md5").update(srcName).digest("hex").slice(0, 10)}`;
 
     const outcome = await sql.begin(async (tx) => {
+      await tx`
+        INSERT INTO sources (id, name, kind, tier, participation_mode, site_fulltext, enabled, health, imported_from, next_fetch_at)
+        VALUES (${srcId}, ${srcName}, 'external', 'T2', 'editorial', true, true, 'ok', 'https://aihot.news', now() + interval '3650 days')
+        ON CONFLICT (id) DO NOTHING`;
       const inserted = await tx<{ id: string }[]>`
         INSERT INTO articles (id, source_id, identity_key, url, title, author, language,
           published_at, published_at_claim, discovered_at, source_updated_at, timeline_at,
           backfill, backfill_reason, body_status, processing_state, raw)
-        VALUES (${articleId}, ${SOURCE_ID}, ${identityKey}, ${original}, ${articleTitle}, null, null,
+        VALUES (${articleId}, ${srcId}, ${identityKey}, ${original}, ${articleTitle}, null, null,
           ${publishedAt}, ${publishedAt}, ${discoveredAt}, null, ${timelineAt},
-          true, 'aihot-import', 'none', 'analyzed', ${JSON.stringify(raw)}::jsonb)
+          true, 'aihot-import', 'none', 'analyzed', ${tx.json(raw)})
         ON CONFLICT (identity_key) DO NOTHING
         RETURNING id`;
       if (inserted.length === 0) return "dup" as const;
@@ -302,7 +304,14 @@ for (let n = 0; n < importedIds.length; n++) {
         const html = block(section);
         const text = plain(section);
         const lang = cjkRatio(articleTitle) > 0.3 ? "zh" : "en";
-        await sql`UPDATE articles SET body_text = ${text}, body_html = ${html}, body_status = 'ok', language = ${lang}, updated_at = now() WHERE id = ${id}`;
+        // First body image becomes the card thumbnail (media[0], native shape).
+        const img = /<img\b[^>]*\ssrc="(https?:\/\/[^"]+)"/i.exec(html)?.[1]?.replace(/&amp;/g, "&");
+        const media = img ? [{ url: img, kind: "image" }] : null;
+        if (media) {
+          await sql`UPDATE articles SET body_text = ${text}, body_html = ${html}, body_status = 'ok', language = ${lang}, media = ${sql.json(media)}, updated_at = now() WHERE id = ${id}`;
+        } else {
+          await sql`UPDATE articles SET body_text = ${text}, body_html = ${html}, body_status = 'ok', language = ${lang}, updated_at = now() WHERE id = ${id}`;
+        }
         ok++;
         withBody.push(id);
       }
@@ -348,7 +357,7 @@ if (true) { // always run: the self-heal query below picks up untagged selected 
   // (dedup anchor: the receipt written by this very step) and items not yet grouped.
   const staleTaggable = await sql<{ article_id: string }[]>`
     SELECT a.article_id FROM analyses a JOIN articles ar ON ar.id = a.article_id
-    WHERE ar.source_id = ${SOURCE_ID} AND a.selected AND a.origin = 'replay'
+    WHERE ar.source_id LIKE ${SOURCE_PREFIX + "%"} AND a.selected AND a.origin = 'replay'
       AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.purpose = 'structure_article' AND r.subject = 'sync-tags:' || a.article_id)`;
   const taggableIds = [...new Set([...selectedIds, ...staleTaggable.map((r) => r.article_id)])];
   const topics = await sql<{ slug: string; name: string; tags: string[]; entity_id: string | null }[]>`
