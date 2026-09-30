@@ -84,10 +84,7 @@ function materialQuality(a: AnalyzeInputArticle): string {
 }
 
 /** The material as the prefilter and the content understanding read it. */
-export function renderContext(
-  a: AnalyzeInputArticle,
-  opts: { annotateQuoted?: boolean; bodyChars?: number; preferExcerpt?: boolean } = {},
-): string {
+export function renderContext(a: AnalyzeInputArticle, opts: { annotateQuoted?: boolean } = {}): string {
   const lines: string[] = [];
   lines.push(`【来源】${a.source.name}（${a.source.kind}，tier=${a.source.tier || "未分级"}）`);
   if (a.source.tags?.length) lines.push(`【来源标签】${a.source.tags.join(", ")}`);
@@ -114,33 +111,14 @@ export function renderContext(
   }
   lines.push("");
   lines.push(opts.annotateQuoted && quoted ? "【正文（作者自己的内容）】" : "【正文】");
-  lines.push(opts.bodyChars === undefined ? capBody(readingBody(a, opts)) : clampText(readingBody(a, opts), opts.bodyChars));
+  lines.push(capBody(a.xPost ? String(a.xPost.text ?? a.title) : (a.bodyText ?? a.excerpt ?? "(无正文)")));
   lines.push("");
   lines.push(`【材料质量】${materialQuality(a)}`);
   return lines.join("\n");
 }
 
-/**
- * What a step is shown as the body. The full text by default; `preferExcerpt` asks for the feed's own
- * summary instead, falling back to the opening of the body so an item is never judged on its title alone.
- */
-function readingBody(a: AnalyzeInputArticle, opts: { preferExcerpt?: boolean }): string {
-  if (a.xPost) return String(a.xPost.text ?? a.title);
-  if (opts.preferExcerpt && a.excerpt?.trim()) return a.excerpt;
-  return a.bodyText ?? a.excerpt ?? "(无正文)";
-}
-
-/**
- * How much of the body the prefilter reads. It is a wide-recall gate — "does this belong to the
- * industry at all" — and only a BLOCK stops an item, so the title and the feed's summary are enough.
- * The body it is not shown is the part no provider cache can cover, which is why this step's input is
- * nearly all full price today.
- */
-const PREFILTER_BODY_CHARS = 600;
-
 /** The prefilter's user message: the context as a JSON string (the prompt was tuned on this form). */
-export const prefilterUser = (a: AnalyzeInputArticle) =>
-  JSON.stringify(renderContext(a, { bodyChars: PREFILTER_BODY_CHARS, preferExcerpt: true }));
+export const prefilterUser = (a: AnalyzeInputArticle) => JSON.stringify(renderContext(a));
 
 /** Nothing to judge beyond the title: the prefilter's BLOCK then means "wait for material". */
 export function missingEvidence(a: AnalyzeInputArticle): boolean {
