@@ -237,10 +237,10 @@ for (const item of items) {
       const inserted = await tx<{ id: string }[]>`
         INSERT INTO articles (id, source_id, identity_key, url, title, author, language,
           published_at, published_at_claim, discovered_at, source_updated_at, timeline_at,
-          backfill, backfill_reason, body_status, raw)
+          backfill, backfill_reason, body_status, processing_state, raw)
         VALUES (${articleId}, ${SOURCE_ID}, ${identityKey}, ${original}, ${articleTitle}, null, null,
           ${publishedAt}, ${publishedAt}, ${discoveredAt}, null, ${timelineAt},
-          true, 'aihot-import', 'none', ${JSON.stringify(raw)}::jsonb)
+          true, 'aihot-import', 'none', 'analyzed', ${JSON.stringify(raw)}::jsonb)
         ON CONFLICT (identity_key) DO NOTHING
         RETURNING id`;
       if (inserted.length === 0) return "dup" as const;
