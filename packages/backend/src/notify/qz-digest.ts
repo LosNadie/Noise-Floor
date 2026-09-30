@@ -62,14 +62,15 @@ export async function collectDigestItems(topics: string[], now: Date): Promise<D
         ORDER BY p.score DESC NULLS LAST, p.timeline_at DESC LIMIT ${MAX_ITEMS}`;
 }
 
-/** The one text message a digest push carries; identical for the morning job and a manual push. */
+/** The one text message a digest push carries; identical for the morning job and a manual push.
+ * The Q助理 client renders markdown (**bold**, [text](url), lists) but not HTML — verified live. */
 export function buildDigestMessage(items: DigestItem[]): string {
   return [
-    `过去 24 小时你关注领域的精选（${items.length} 条）：`,
+    `**过去 24 小时你关注领域的精选**（${items.length} 条）`,
     "",
     ...items.map((it, i) => `${i + 1}. ${it.title}`),
     "",
-    `—— ${config.siteUrl.replace(/^https?:\/\//, "")} · 点击查看今日日报`,
+    `[打开今日日报 →](${config.siteUrl}/daily)`,
   ].join("\n");
 }
 
