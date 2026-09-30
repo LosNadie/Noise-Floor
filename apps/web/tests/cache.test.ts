@@ -101,14 +101,22 @@ test("HTML and navigation share freshness; cookies do not personalize public res
   assert.equal(html.headers.get("X-Accel-Expires"), `@${deadline}`);
   assert.match(await html.text(), /精选/);
   const plain = await fetch(`${origin}/about.data`);
-  const signedIn = await fetch(`${origin}/about.data?_routes=root`, { headers: { cookie: "admin_session=private; aihot_vid=reader" } });
+  const readerCookie = "admin_session=private; aihot_vid=reader";
+  const signedIn = await fetch(`${origin}/about.data?_routes=root`, { headers: { cookie: readerCookie } });
   assert.match(plain.headers.get("Cache-Control")!, /^public,/);
   assert.match(plain.headers.get("X-Accel-Expires")!, /^@\d+$/);
   assert.equal(plain.headers.get("Cache-Control"), "public, max-age=300, s-maxage=300, must-revalidate");
   assert.equal(Date.parse(plain.headers.get("Date")!) / 1000 + 300, Number(plain.headers.get("X-Accel-Expires")!.slice(1)));
   assert.equal(signedIn.headers.get("Set-Cookie"), null);
   assert.equal(await signedIn.text(), await plain.text());
-  assert.ok(apiCookies.every((cookie) => !cookie));
+  // The web forwards the reader's own cookie so the api gate can see the session it already
+  // verified — a stale one re-enters sign-in instead of answering 503. That must not personalize a
+  // public result: the body and the freshness headers stay exactly what an anonymous reader gets,
+  // and the web passes on the cookie as the reader sent it rather than inventing or extending one.
+  // Only the gate may act on it; the public read layer reads no cookies at all.
+  assert.equal(signedIn.headers.get("Cache-Control"), plain.headers.get("Cache-Control"));
+  assert.equal(signedIn.headers.get("X-Accel-Expires"), plain.headers.get("X-Accel-Expires"));
+  assert.ok(apiCookies.every((cookie) => cookie === undefined || cookie === readerCookie));
 });
 
 test("missing routes cannot be hidden by a root-only request; errors and redirects stay uncached", async () => {
