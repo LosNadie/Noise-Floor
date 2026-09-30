@@ -6,4 +6,6 @@ export const FEATURES = {
   leaderboard: false,
   /** Codex 重置监控：盯 OpenAI Codex 负责人在 X 上的额度重置公告（/codex-reset）。需要 SocialData。 */
   codexResetMonitor: false,
+  /** 热点榜：多信源事件聚合的 /hot（要求至少两个独立信源）。当前仅单一转载源，撑不起来，默认关。 */
+  hotRanking: false,
 } as const;

@@ -93,7 +93,7 @@ export function registerSite(app: FastifyInstance) {
     const unfiltered = filters.channel === "all" && !filters.category && !filters.tag && !filters.topic && !q.cursor;
     const [data, hot] = await Promise.all([
       loadTimeline({ ...filters, cursor: q.cursor || null, limit }),
-      unfiltered ? loadHotStrip() : null,
+      unfiltered && FEATURES.hotRanking ? loadHotStrip() : null,
     ]);
     const body = { ...data, hot, generatedAt: new Date().toISOString() };
     const cc = cacheUntil(reply, 60, data.refreshAt);
@@ -189,10 +189,12 @@ export function registerSite(app: FastifyInstance) {
   registerFeedback(app);
 
 
-  app.get("/api/site/hot", siteHandler(async (req, reply) => {
-    const data = await loadHot();
-    return sendJsonWithEtag(req, reply, data, { etagPrefix: "hot", cacheControl: "public, max-age=30, s-maxage=30" });
-  }));
+  if (FEATURES.hotRanking) {
+    app.get("/api/site/hot", siteHandler(async (req, reply) => {
+      const data = await loadHot();
+      return sendJsonWithEtag(req, reply, data, { etagPrefix: "hot", cacheControl: "public, max-age=30, s-maxage=30" });
+    }));
+  }
 
   app.get("/api/site/stories/:publicId", siteHandler(async (req, reply) => {
     const publicId = (req.params as { publicId: string }).publicId;

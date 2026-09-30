@@ -40,7 +40,9 @@ export const SCHEDULES: Scheduled[] = [
   { name: "content.sweep", cron: "*/5 * * * *", run: sweepUnprocessed },
   // Full-text translations of newly selected items (model calls; off with MODEL_CALLS_ENABLED=false).
   { name: "content.translate", cron: "*/5 * * * *", run: () => translatePending() },
-  { name: "hot.rank", cron: "*/5 * * * *", run: () => computeHotRanking() },
+  ...(FEATURES.hotRanking
+    ? [{ name: "hot.rank", cron: "*/5 * * * *", run: () => computeHotRanking() }]
+    : []),
   { name: "hot.snapshot", cron: "2 * * * *", run: () => snapshotHeat() },
   { name: "stories.status", cron: "7 * * * *", run: refreshStoryStatuses },
   { name: "stories.links", cron: "12 * * * *", run: linkRelatedStories },
