@@ -117,6 +117,7 @@ export const API_OWNED_PATTERNS: RegExp[] = [
   /^\/\.well-known\//,
   /^\/(favicon\.ico|icon\.png|icon-192\.png|apple-icon\.png|logo\.svg)$/,
   /^\/(model-providers|leaderboard-sources|og|contact)\//,
+  /^\/aihot-skill\//,
   /^\/[0-9a-f]{32}\.txt$/,
   /^\/items\/[^/]+\/markdown$/,
 ];

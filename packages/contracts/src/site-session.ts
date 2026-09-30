@@ -109,7 +109,7 @@ const EXEMPT_EXACT = [
   "/logo.svg",
   "/api/health",
 ];
-const EXEMPT_PREFIXES = ["/assets/", "/api/auth/", "/api/admin/", "/admin"];
+const EXEMPT_PREFIXES = ["/assets/", "/api/auth/", "/api/admin/", "/admin", "/aihot-skill/"];
 
 export function loginExempt(pathname: string): boolean {
   if (EXEMPT_EXACT.includes(pathname)) return true;
