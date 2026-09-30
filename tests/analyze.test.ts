@@ -104,7 +104,9 @@ test("a selected item: prefilter, two scores, the content understanding and the 
   assert.deepEqual([r.output.writer, r.output.itemType, r.output.prefilter.label, r.output.fact.title], ["understand", "model_release", "PASS", "事实 CLEAR"]);
   const score = requests.find((q) => q.marker === "CLEAR" && q.step === "score")!;
   assert.match(score.user, /【标题】\nCLEAR model release/, "the score reads the original title, before any writing");
-  assert.deepEqual([score.body.temperature, score.body.reasoning_effort, score.body.max_tokens], [1, "high", 65536]);
+  // 65_536 is the selection preset's own budget (analyze.ts SCORE_CALL); a preset that thinks on every
+  // call gets 4_000 more, because the reasoning is billed against max_tokens before the answer starts.
+  assert.deepEqual([score.body.temperature, score.body.reasoning_effort, score.body.max_tokens], [1, "high", 65_536 + 4_000]);
   const understand = requests.find((q) => q.marker === "CLEAR" && q.step === "understand")!;
   assert.ok(understand.user.startsWith("请按系统规则理解以下单篇材料，一次返回全部六个字段。"));
   assert.ok(understand.system.includes("【摘要答案前置规则") && understand.system.includes("【标题自洽规则"));
