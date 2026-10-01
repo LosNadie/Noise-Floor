@@ -24,8 +24,10 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     # Per-container CPU caps: on a 2-vCPU box with a provider CPU-limit policy, no single service may
-    # pin both cores (the whole docker.service is additionally capped at 170% via systemd).
+    # pin both cores. Aggregate caps via systemd drop-ins: docker.slice CPUQuota=130% (all containers)
+    # + docker.service CPUQuota=170% (daemon & builds). Memory caps keep the 3G box out of swap thrash.
     cpus: 0.7
+    mem_limit: 600m
     environment:
       POSTGRES_USER: aihot
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aihot}
@@ -48,8 +50,10 @@ services:
     <<: *app
     command: ["node", "apps/api/src/main.ts"]
     cpus: 0.7
+    mem_limit: 448m
     environment:
       <<: *app-env
+      NODE_OPTIONS: --max-old-space-size=320
       API_HOST: 0.0.0.0
       API_PORT: "3001"
     depends_on:
@@ -62,6 +66,10 @@ services:
     # Heaviest container: sync batches, translations, ranking. Hard-capped so a runaway batch
     # degrades instead of pinning the box (systemd caps docker.service at 170% overall).
     cpus: 1.2
+    mem_limit: 384m
+    environment:
+      <<: *app-env
+      NODE_OPTIONS: --max-old-space-size=256
     depends_on:
       setup:
         condition: service_completed_successfully
@@ -70,8 +78,10 @@ services:
     <<: *app
     command: ["node", "apps/web/server.ts"]
     cpus: 0.5
+    mem_limit: 448m
     environment:
       <<: *app-env
+      NODE_OPTIONS: --max-old-space-size=320
       WEB_HOST: 0.0.0.0
       WEB_PORT: "3000"
     ports:
