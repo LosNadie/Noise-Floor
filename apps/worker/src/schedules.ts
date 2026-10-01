@@ -37,11 +37,12 @@ interface Scheduled {
 const collecting = process.env.COLLECT_ENABLED !== "false";
 
 export const SCHEDULES: Scheduled[] = [
-  { name: "content.sweep", cron: "*/5 * * * *", run: sweepUnprocessed },
+  // 15-min cadence: light bookkeeping jobs on a 2-vCPU box (CPU-limit protection), none are latency-sensitive.
+  { name: "content.sweep", cron: "*/15 * * * *", run: sweepUnprocessed },
   // Full-text translations of newly selected items (model calls; off with MODEL_CALLS_ENABLED=false).
-  { name: "content.translate", cron: "*/5 * * * *", run: () => translatePending() },
+  { name: "content.translate", cron: "*/15 * * * *", run: () => translatePending() },
   ...(FEATURES.hotRanking
-    ? [{ name: "hot.rank", cron: "*/5 * * * *", run: () => computeHotRanking() }]
+    ? [{ name: "hot.rank", cron: "*/15 * * * *", run: () => computeHotRanking() }]
     : []),
   { name: "hot.snapshot", cron: "2 * * * *", run: () => snapshotHeat() },
   { name: "stories.status", cron: "7 * * * *", run: refreshStoryStatuses },
@@ -66,14 +67,14 @@ export const SCHEDULES: Scheduled[] = [
   // automatic release, before the alerts look.
   {
     name: "ops.recover",
-    cron: "*/10 * * * *",
+    cron: "*/15 * * * *",
     run: async () => ({ receipts: await markStalePendingReceipts(), released: await autoReleaseUnknownReceipts(), deliveries: await markStaleDeliveries() }),
   },
-  { name: "ops.alerts", cron: "*/10 * * * *", run: () => checkAlerts() },
+  { name: "ops.alerts", cron: "*/15 * * * *", run: () => checkAlerts() },
   // One message with the follow-ups that do not touch readers (nothing when there are none).
   { name: "ops.digest", cron: "0 9 * * *", missed: "once", run: () => sendDigest() },
   // Feedback that did not reach the internal Feishu chat when it was sent (off with FEISHU_INTERNAL_ENABLED).
-  { name: "feedback.forward", cron: "*/10 * * * *", run: () => forwardPendingFeedback() },
+  { name: "feedback.forward", cron: "*/15 * * * *", run: () => forwardPendingFeedback() },
   ...(backupConfigured() ? [{ name: "ops.backup", cron: "10 4 * * *", missed: "once" as const, run: () => runBackup() }] : []),
   { name: "reports.source-health", cron: "0 9 * * 1", missed: "once", run: () => sourceHealthWeekly() },
   // Four upstream checks a day; a new run is published only when the evidence changed. With collection
@@ -83,7 +84,8 @@ export const SCHEDULES: Scheduled[] = [
     : []),
   ...(collecting
     ? [
-        { name: "sources.schedule", cron: "* * * * *", run: () => scheduleDueSources() },
+        // Every 5 min is enough: with the aihot sync pipeline the native sources rarely come due.
+        { name: "sources.schedule", cron: "*/5 * * * *", run: () => scheduleDueSources() },
         { name: "sources.adapt-intervals", cron: "20 4 * * *", run: adaptIntervals },
         // WeChat official accounts (paid), each once per its interval.
         { name: "sources.mp-reconcile", cron: "*/15 * * * *", run: () => scheduleMpReconcile() },
@@ -106,8 +108,9 @@ export async function registerSchedules(boss: PgBoss) {
     const queue = `cron.${s.name}`;
     await ensureQueue(queue, { policy: "singleton", retryLimit: 1, expireInSeconds: 3600 });
     await boss.schedule(queue, s.cron, {}, { tz: "Asia/Shanghai", missed: s.missed ?? "skip" });
-    // Schedules fire at minute boundaries; a 15 s pickup keeps them on time with a third of the polling.
-    await boss.work(queue, { pollingIntervalSeconds: 15 }, async () => recordRun(s.name, s.run));
+    // Schedules fire at minute boundaries; a 45 s pickup keeps them on time at a ninth of the polling
+    // (cadences are ≥5 min, so a delay of ≤45 s never matters — CPU-limit protection for a 2-vCPU box).
+    await boss.work(queue, { pollingIntervalSeconds: 45 }, async () => recordRun(s.name, s.run));
   }
   // A schedule removed from the table (a module switched off) must not keep firing from an earlier run.
   const names = new Set(SCHEDULES.map((s) => `cron.${s.name}`));

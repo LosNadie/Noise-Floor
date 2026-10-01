@@ -23,6 +23,9 @@ services:
   db:
     image: postgres:17-alpine
     restart: unless-stopped
+    # Per-container CPU caps: on a 2-vCPU box with a provider CPU-limit policy, no single service may
+    # pin both cores (the whole docker.service is additionally capped at 170% via systemd).
+    cpus: 0.7
     environment:
       POSTGRES_USER: aihot
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aihot}
@@ -44,6 +47,7 @@ services:
   api:
     <<: *app
     command: ["node", "apps/api/src/main.ts"]
+    cpus: 0.7
     environment:
       <<: *app-env
       API_HOST: 0.0.0.0
@@ -55,6 +59,9 @@ services:
   worker:
     <<: *app
     command: ["node", "apps/worker/src/main.ts"]
+    # Heaviest container: sync batches, translations, ranking. Hard-capped so a runaway batch
+    # degrades instead of pinning the box (systemd caps docker.service at 170% overall).
+    cpus: 1.2
     depends_on:
       setup:
         condition: service_completed_successfully
@@ -62,6 +69,7 @@ services:
   web:
     <<: *app
     command: ["node", "apps/web/server.ts"]
+    cpus: 0.5
     environment:
       <<: *app-env
       WEB_HOST: 0.0.0.0
