@@ -203,7 +203,10 @@ if (stale.length) {
 
 // ---- step 1: import ----
 
-const all = await fetchAll();
+// RETRY_BODIES=1: skip the upstream pull/import entirely and refetch bodies for recent
+// aihot items whose body is still missing (a rate-limited run once failed 80% of them).
+const RETRY = process.env.RETRY_BODIES === "1";
+const all = RETRY ? [] : await fetchAll();
 const items = MAX_ITEMS > 0 ? all.slice(0, MAX_ITEMS) : all;
 console.log(`[${new Date().toISOString()}] fetched ${all.length} items from aihot.news (${WINDOW} window), importing ${items.length}`);
 
@@ -213,6 +216,16 @@ let selectedCount = 0;
 let errors = 0;
 const errorList: string[] = [];
 const importedIds: string[] = [];
+if (RETRY) {
+  const missing = await sql<{ id: string }[]>`
+    SELECT id FROM articles
+    WHERE (source_id = ${SOURCE_ID} OR source_id LIKE ${SOURCE_PREFIX + "%"})
+      AND discovered_at > now() - interval '7 days'
+      AND (body_html IS NULL OR body_html = '')
+    ORDER BY discovered_at DESC`;
+  importedIds.push(...missing.map((r) => r.id));
+  console.log(`[retry] refetching bodies for ${importedIds.length} aihot items missing body`);
+}
 const selectedIds: string[] = [];
 
 for (const item of items) {
@@ -288,8 +301,10 @@ const withBody: string[] = [];
 for (let n = 0; n < importedIds.length; n++) {
   const id = importedIds[n]!;
   const aihotId = id.replace(/^aihot-/, "");
-  const item = items.find((it) => `aihot-${it.id}` === id)!;
-  const articleTitle = (item.originalTitle ?? item.title ?? "").trim();
+  const item = items.find((it) => `aihot-${it.id}` === id);
+  const articleTitle = ((item?.originalTitle ?? item?.title)
+    ?? (await sql<{ title: string }[]>`SELECT title FROM articles WHERE id = ${id}`)[0]?.title
+    ?? "").trim();
   try {
     const { status, md } = await fetchMarkdown(aihotId);
     if (status !== 200 || !md) {
