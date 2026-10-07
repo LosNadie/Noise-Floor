@@ -408,3 +408,7 @@ if (true) { // always run: the self-heal query below picks up untagged selected 
 }
 console.log(`[${new Date().toISOString()}] sync finished`);
 await sql.end();
+// One-shot CLI: force-exit so no lingering open handle keeps node (and the flock-holding
+// `docker compose exec` that wraps us) alive forever — a hung run once starved every
+// later cron tick via flock -n. Safe: all writes are awaited above.
+process.exit(0);
