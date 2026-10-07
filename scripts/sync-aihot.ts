@@ -295,10 +295,15 @@ if (errorList.length) console.log(`import failures (first 10):\n${errorList.slic
 let ok = 0;
 let noBody = 0;
 let failed = 0;
+let failStreak = 0; // consecutive failures — upstream markdown endpoint down (e.g. CF 520) melts a whole run otherwise
 const bodyFailures: string[] = [];
 const withBody: string[] = [];
 
 for (let n = 0; n < importedIds.length; n++) {
+  if (failStreak >= 20) {
+    console.log(`body fetch aborted after ${failStreak} consecutive failures — upstream markdown endpoint looks down, retry via RETRY_BODIES=1 later`);
+    break;
+  }
   const id = importedIds[n]!;
   const aihotId = id.replace(/^aihot-/, "");
   const item = items.find((it) => `aihot-${it.id}` === id);
@@ -309,8 +314,10 @@ for (let n = 0; n < importedIds.length; n++) {
     const { status, md } = await fetchMarkdown(aihotId);
     if (status !== 200 || !md) {
       failed++;
+      failStreak++;
       bodyFailures.push(`${id}: http ${status}`);
     } else {
+      failStreak = 0;
       const m = BODY_HEADER.exec(md);
       if (!m) {
         noBody++; // upstream export has no body section — keep terminal 'none'
@@ -333,6 +340,7 @@ for (let n = 0; n < importedIds.length; n++) {
     }
   } catch (err) {
     failed++;
+    failStreak++;
     bodyFailures.push(`${id}: ${(err as Error).message}`);
   }
   if ((n + 1) % 100 === 0) console.log(`bodies progress ${n + 1}/${importedIds.length} ok=${ok} noBody=${noBody} failed=${failed}`);
