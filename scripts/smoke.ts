@@ -7,7 +7,7 @@ import { FEATURES } from "@aihot/industry/features";
 const at = process.argv.indexOf("--base");
 const base = (at > 0 ? process.argv[at + 1] : process.env.SITE_URL) ?? "http://localhost:3000";
 
-const PAGES = ["/", "/all", "/hot", "/daily", "/daily/archive", "/topics", "/starred", "/agent", "/about", "/changelog", "/feedback", "/terms", "/privacy", "/more", "/admin/login"];
+const PAGES = ["/", "/all", "/daily", "/daily/archive", "/topics", "/starred", "/agent", "/about", "/changelog", "/feedback", "/terms", "/privacy", "/more", "/admin/login"];
 const MACHINE: Array<[path: string, type: RegExp]> = [
   ["/api/health", /json/],
   ["/api/v1/items", /json/],
@@ -24,10 +24,13 @@ const MACHINE: Array<[path: string, type: RegExp]> = [
   ["/icon.png", /image\/png/],
   ["/favicon.ico", /icon/],
 ];
-// The leaderboard pages answer 503 until the first round is published (a fresh site computes it when
-// the worker starts; with collection off there is nothing to compute).
+// The optional AI-only modules (industry/features.ts) drop their pages and interfaces when they are
+// off, so only ask for the ones this site actually serves. The leaderboard answers 503 until the
+// first round is published (a fresh site computes it when the worker starts; with collection off
+// there is nothing to compute).
 const LEADERBOARD = FEATURES.leaderboard ? ["/leaderboard", "/leaderboard/rules", "/leaderboard/sources"] : [];
 PAGES.push(...LEADERBOARD);
+if (FEATURES.hotRanking) PAGES.push("/hot");
 if (FEATURES.codexResetMonitor) PAGES.push("/codex-reset");
 
 let failed = 0;

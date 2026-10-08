@@ -5,6 +5,7 @@
 import { config } from "@aihot/backend/config";
 import { CATEGORY_LABELS } from "@aihot/contracts/taxonomy";
 import { beijingDate } from "@aihot/contracts/time";
+import { FEATURES } from "@aihot/industry/features";
 import { ogEtag } from "../apps/api/src/og/render.ts";
 import { posterEtag } from "../apps/api/src/og/poster.ts";
 import { tag } from "./setup.ts";
@@ -176,7 +177,9 @@ test("a withdrawn item leaves the hot board and the hot APIs at once, not at the
   await computeHotRanking();
   const rep = (await latestHotRanking())!.entries.find((e) => e.storyId === story!.id)?.representativeItemId;
   assert.ok(rep, "the story is on the board with a representative item");
-  const exits = ["/api/v1/hot-topics", "/api/site/hot"];
+  // /api/site/hot is served only while the hot board module is on (industry/features.ts); the public
+  // v1 exit answers either way.
+  const exits = FEATURES.hotRanking ? ["/api/v1/hot-topics", "/api/site/hot"] : ["/api/v1/hot-topics"];
   for (const url of exits) assert.ok((await get(url)).body.includes(rep!), `${url} shows the item before`);
 
   await setVisibility(rep!, { visibility: "withdrawn", reason: "test", version: 0 }, "test");
