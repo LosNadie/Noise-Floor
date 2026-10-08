@@ -1,10 +1,10 @@
 // One-off: import the past 7 days of aihot.news into the local pool.
 // Idempotent — dedup via articles.identity_key (same derivation as the native pipeline),
 // so already-present originals (local crawls, X posts) are skipped automatically.
-// Usage (inside the api container): node /tmp/import-aihot-week.ts  [MAX_ITEMS=3 for a smoke run]
+// Usage: node --env-file=.env scripts/import-aihot-week.ts  [MAX_ITEMS=3 for a smoke run]
 import postgres from "postgres";
-import { identityKeyForUrl } from "/app/packages/backend/src/lib/url.ts";
-import { publishArticleTx } from "/app/packages/backend/src/publication/publish.ts";
+import { identityKeyForUrl } from "@aihot/backend/lib/url";
+import { publishArticleTx } from "@aihot/backend/publication/publish";
 
 const SOURCE_ID = "external-aihot";
 const MAX_ITEMS = Number(process.env.MAX_ITEMS || 0); // 0 = all

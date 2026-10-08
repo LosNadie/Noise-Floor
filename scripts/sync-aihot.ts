@@ -1,5 +1,9 @@
 // Scheduled incremental sync: aihot.news → Noise Floor.
-// Runs every 8h via host cron: docker compose exec -T api node /app/scripts/sync-aihot.ts
+// Every 8h. Either way of running works (the imports use the workspace package names, not
+// container paths):
+//   inside the api container: docker compose exec -T api node /app/scripts/sync-aihot.ts
+//   on the host, from the repo root: node --env-file=.env scripts/sync-aihot.ts
+// The worker must be running for step 4: grouping jobs go through the pg-boss queue.
 // Steps: 1) pull the upstream v1 API (WINDOW, default 24h — 3x overlap at an 8h cadence),
 // import with identity_key dedup + replay analyses (zero LLM cost);
 // 2) for items imported in THIS run, fetch the full body via /items/:id/markdown and
@@ -9,11 +13,11 @@
 import postgres from "postgres";
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { identityKeyForUrl } from "/app/packages/backend/src/lib/url.ts";
-import { publishArticle, publishArticleTx } from "/app/packages/backend/src/publication/publish.ts";
-import { modelFor } from "/app/packages/backend/src/editorial/models.ts";
-import { chatJson } from "/app/packages/backend/src/providers/llm.ts";
-import { enqueue, QUEUES } from "/app/packages/backend/src/jobs/queue.ts";
+import { identityKeyForUrl } from "@aihot/backend/lib/url";
+import { publishArticle, publishArticleTx } from "@aihot/backend/publication/publish";
+import { modelFor } from "@aihot/backend/editorial/models";
+import { chatJson } from "@aihot/backend/providers/llm";
+import { enqueue, QUEUES } from "@aihot/backend/jobs/queue";
 
 const SOURCE_ID = "external-aihot"; // legacy aggregate row, kept for old references
 const SOURCE_PREFIX = "aihot-s-"; // per-upstream-source rows: id = SOURCE_PREFIX + md5(name).slice(0, 10)

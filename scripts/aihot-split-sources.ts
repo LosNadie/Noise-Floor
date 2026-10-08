@@ -6,7 +6,7 @@
 // 4) republish everything touched.
 import { createHash } from "node:crypto";
 import postgres from "postgres";
-import { publishArticle } from "/app/packages/backend/src/publication/publish.ts";
+import { publishArticle } from "@aihot/backend/publication/publish";
 
 const sql = postgres(process.env.DATABASE_URL!, { max: 2 });
 
