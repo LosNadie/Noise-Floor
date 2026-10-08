@@ -9,7 +9,11 @@
 // 2) for items imported in THIS run, fetch the full body via /items/:id/markdown and
 // convert the `## 正文` section to body_html/body_text (same converter as backfill-aihot-bodies.ts).
 // Idempotent end to end — safe to rerun after a failed/partial run.
-// Env: WINDOW (default 24h), MAX_ITEMS (0 = all, smoke testing), DELAY_MS (default 350), UA.
+// Upstream sits behind Tencent EdgeOne: a 52x answer means the edge node failed to get a clean
+// response from the origin (520 = origin sent RST on an established connection). That is
+// transient, so every call retries with backoff; RETRY_ATTEMPTS=1 turns that off.
+// Env: WINDOW (default 24h), MAX_ITEMS (0 = all, smoke testing), DELAY_MS (default 350), UA,
+//      RETRY_ATTEMPTS (default 4).
 import postgres from "postgres";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -25,7 +29,37 @@ const WINDOW = process.env.WINDOW || "24h";
 const MAX_ITEMS = Number(process.env.MAX_ITEMS || 0);
 const DELAY = Number(process.env.DELAY_MS || 350);
 const UA = process.env.UA || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36";
+// aihot.news sits behind Tencent EdgeOne. A 52x means the edge node could not get a clean
+// answer from the origin (520 = the origin RST'd an already-established connection), which is
+// transient and almost always clears on the next attempt. Every upstream call goes through
+// fetchRetry so a single bad 回源 does not kill the run. RETRY_ATTEMPTS=1 disables retrying.
+const RETRY_ATTEMPTS = Math.max(1, Number(process.env.RETRY_ATTEMPTS || 4));
 const sql = postgres(process.env.DATABASE_URL!, { max: 2 });
+
+async function fetchRetry(url: string, init: RequestInit, label: string): Promise<Response> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    const isLast = attempt === RETRY_ATTEMPTS;
+    try {
+      const res = await fetch(url, init);
+      if (!isLast && (res.status === 429 || res.status >= 500)) {
+        const wait = res.status === 429 ? 5_000 * attempt : 2_000 * attempt;
+        const tag = res.status >= 520 && res.status <= 599 ? " (EdgeOne 回源失败)" : "";
+        console.warn(`[sync] ${label}: HTTP ${res.status}${tag} — retry ${attempt}/${RETRY_ATTEMPTS - 1} in ${wait}ms`);
+        await new Promise((r) => setTimeout(r, wait));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastError = err;
+      if (isLast) break;
+      const wait = 2_000 * attempt;
+      console.warn(`[sync] ${label}: ${(err as Error).message} — retry ${attempt}/${RETRY_ATTEMPTS - 1} in ${wait}ms`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  throw lastError ?? new Error(`${label}: all ${RETRY_ATTEMPTS} attempts failed`);
+}
 
 type AihotItem = {
   id: string;
@@ -52,7 +86,11 @@ async function fetchAll(): Promise<AihotItem[]> {
     u.searchParams.set("by", "published");
     u.searchParams.set("limit", "100");
     if (cursor) u.searchParams.set("cursor", cursor);
-    const res = await fetch(u, { headers: { accept: "application/json" } });
+    const res = await fetchRetry(
+      u.toString(),
+      { headers: { accept: "application/json" }, signal: AbortSignal.timeout(60_000) },
+      `items page ${page + 1}`,
+    );
     if (!res.ok) throw new Error(`aihot api ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const body = (await res.json()) as { items: AihotItem[]; page?: { nextCursor?: string | null; hasMore?: boolean } };
     out.push(...(body.items ?? []));
@@ -175,16 +213,19 @@ function cjkRatio(s: string): number {
 }
 
 async function fetchMarkdown(aihotId: string): Promise<{ status: number; md: string }> {
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const res = await fetch(`https://aihot.news/items/${aihotId}/markdown`, {
-      headers: { accept: "text/markdown, text/plain;q=0.9, */*;q=0.8", "user-agent": UA },
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (res.status === 429) { await new Promise((r) => setTimeout(r, 5_000 * attempt)); continue; }
-    if (res.status === 403 || res.status >= 500) { await new Promise((r) => setTimeout(r, 2_000 * attempt)); continue; }
+  try {
+    const res = await fetchRetry(
+      `https://aihot.news/items/${aihotId}/markdown`,
+      {
+        headers: { accept: "text/markdown, text/plain;q=0.9, */*;q=0.8", "user-agent": UA },
+        signal: AbortSignal.timeout(30_000),
+      },
+      `markdown ${aihotId}`,
+    );
     return { status: res.status, md: res.ok ? await res.text() : "" };
+  } catch {
+    return { status: -1, md: "" };
   }
-  return { status: -1, md: "" };
 }
 
 const BODY_HEADER = /^## 正文(?:\s*·\s*(?:原文|AI 翻译))?\s*$/m;
