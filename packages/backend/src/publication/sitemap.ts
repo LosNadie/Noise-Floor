@@ -34,23 +34,27 @@ interface Entry {
 async function build(): Promise<string> {
   const entries: Entry[] = [];
   const [latestItem] = await sql<{ t: Date | null }[]>`SELECT max(timeline_at) AS t FROM publications WHERE visibility = 'public' AND selected`;
-  const [latestDaily] = await sql<{ key: string | null; t: Date | null }[]>`SELECT max(key) AS key, max(generated_at) AS t FROM reports WHERE kind = 'daily'`;
   const now = latestItem?.t ?? new Date();
   entries.push(
     { loc: "/", lastmod: now, changefreq: "hourly", priority: 1 },
     { loc: "/all", lastmod: now, changefreq: "hourly", priority: 0.9 },
-    { loc: "/daily", lastmod: latestDaily?.t, changefreq: "daily", priority: 0.9 },
     ...(FEATURES.hotRanking ? [{ loc: "/hot", lastmod: now, changefreq: "hourly", priority: 0.9 }] : []),
-    { loc: "/daily/archive", lastmod: latestDaily?.t, changefreq: "daily", priority: 0.7 },
-    { loc: "/weekly", changefreq: "weekly", priority: 0.7 },
-    { loc: "/monthly", changefreq: "monthly", priority: 0.6 },
-    { loc: "/topics", changefreq: "daily", priority: 0.7 },
-    { loc: "/agent", lastmod: now, changefreq: "weekly", priority: 0.7 },
     { loc: "/about", changefreq: "monthly", priority: 0.5 },
     { loc: "/terms", changefreq: "monthly", priority: 0.4 },
     { loc: "/privacy", changefreq: "monthly", priority: 0.4 },
-    { loc: "/changelog", lastmod: now, changefreq: "weekly", priority: 0.5 },
   );
+  if (FEATURES.dailyReport) {
+    const [latestDaily] = await sql<{ key: string | null; t: Date | null }[]>`SELECT max(key) AS key, max(generated_at) AS t FROM reports WHERE kind = 'daily'`;
+    entries.push(
+      { loc: "/daily", lastmod: latestDaily?.t, changefreq: "daily", priority: 0.9 },
+      { loc: "/daily/archive", lastmod: latestDaily?.t, changefreq: "daily", priority: 0.7 },
+      { loc: "/weekly", changefreq: "weekly", priority: 0.7 },
+      { loc: "/monthly", changefreq: "monthly", priority: 0.6 },
+    );
+  }
+  if (FEATURES.topics) entries.push({ loc: "/topics", changefreq: "daily", priority: 0.7 });
+  if (FEATURES.agentPack) entries.push({ loc: "/agent", lastmod: now, changefreq: "weekly", priority: 0.7 });
+  if (FEATURES.changelog) entries.push({ loc: "/changelog", lastmod: now, changefreq: "weekly", priority: 0.5 });
   if (FEATURES.leaderboard) {
     entries.push(
       { loc: "/leaderboard", changefreq: "daily", priority: 0.8 },
@@ -60,12 +64,16 @@ async function build(): Promise<string> {
     for (const board of ["coding", "reasoning", "knowledge", "professional"]) entries.push({ loc: `/leaderboard/category/${board}`, changefreq: "daily", priority: 0.6 });
   }
   if (FEATURES.codexResetMonitor) entries.push({ loc: "/codex-reset", changefreq: "hourly", priority: 0.6 });
-  const reports = await sql<{ kind: string; key: string; generated_at: Date }[]>`SELECT kind, key, generated_at FROM reports ORDER BY kind, key DESC`;
-  for (const r of reports) entries.push({ loc: `/${r.kind}/${r.key}`, lastmod: r.generated_at, changefreq: r.kind === "daily" ? "never" : "monthly", priority: r.kind === "daily" ? 0.6 : 0.6 });
-  for (const t of await topicPageCounts()) {
-    if (!t.indexable) continue;
-    entries.push({ loc: `/topics/${t.slug}`, lastmod: t.latest, changefreq: "daily", priority: 0.6 });
-    for (let p = 2; p <= t.pages; p++) entries.push({ loc: `/topics/${t.slug}/page/${p}`, lastmod: t.latest, changefreq: "weekly", priority: 0.3 });
+  if (FEATURES.dailyReport) {
+    const reports = await sql<{ kind: string; key: string; generated_at: Date }[]>`SELECT kind, key, generated_at FROM reports ORDER BY kind, key DESC`;
+    for (const r of reports) entries.push({ loc: `/${r.kind}/${r.key}`, lastmod: r.generated_at, changefreq: r.kind === "daily" ? "never" : "monthly", priority: r.kind === "daily" ? 0.6 : 0.6 });
+  }
+  if (FEATURES.topics) {
+    for (const t of await topicPageCounts()) {
+      if (!t.indexable) continue;
+      entries.push({ loc: `/topics/${t.slug}`, lastmod: t.latest, changefreq: "daily", priority: 0.6 });
+      for (let p = 2; p <= t.pages; p++) entries.push({ loc: `/topics/${t.slug}/page/${p}`, lastmod: t.latest, changefreq: "weekly", priority: 0.3 });
+    }
   }
   // Stories with reports of their own; pages that only gather reports grouped elsewhere (imported story
   // levels, regrouped history) are reachable but not listed.

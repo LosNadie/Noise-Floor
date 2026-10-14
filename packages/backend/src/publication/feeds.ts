@@ -3,6 +3,7 @@
 // sources that explicitly allow redistribution. Titles come from the site's name and categories.
 import { CATEGORY_LABELS, PUBLIC_API_CATEGORY_KEYS, type PublicApiCategoryKey } from "@aihot/contracts/taxonomy";
 import { SITE, withSubject } from "@aihot/industry/site";
+import { FEATURES } from "@aihot/industry/features";
 import { config } from "../config.ts";
 import { sql } from "../db.ts";
 import { escapeXml } from "../lib/text.ts";
@@ -25,8 +26,14 @@ const FEEDS: Record<"selected" | "selectedFull" | "all" | "daily", FeedMeta> = {
   selected: { id: "selected", path: "/feed.xml", title: `${SITE.name} — 精选`, description: `最新 50 条 ${SITE.name} 精选摘要，保留标题、站内阅读与原文入口；需要阅读器内全文可改订 /feed/full.xml。`, homePath: "/", pollHintMinutes: 30 },
   selectedFull: { id: "selected-full", path: "/feed/full.xml", title: `${SITE.name} — 精选全文`, description: "与精选摘要相同的最新 50 条；仅对明确允许再分发的来源内联正文，其余仍提供摘要和阅读入口。", homePath: "/", pollHintMinutes: 30 },
   all: { id: "all", path: "/feed/all.xml", title: `${SITE.name} — 全部动态`, description: "最近 7 天公开动态，按真实发布时间倒序；不含未审内容、低相关条目和已合并的重复条目。", homePath: "/all", pollHintMinutes: 30 },
+  // daily feed 随 FEATURES.dailyReport 开关下线（2026-10-12）；键保留以满足类型，仅在开关开启时暴露。
   daily: { id: "daily", path: "/feed/daily.xml", title: `${SITE.name} ${withSubject("日报")}`, description: `${SITE.name} 每天 08:00 北京时间发布的${withSubject("日报")}，保留最近 30 期。`, homePath: "/daily", pollHintMinutes: 30 },
 };
+
+/** The feeds publicly listed/discoverable right now. */
+export const ACTIVE_FEEDS: FeedMeta[] = FEATURES.dailyReport
+  ? [FEEDS.selected, FEEDS.selectedFull, FEEDS.all, FEEDS.daily]
+  : [FEEDS.selected, FEEDS.selectedFull, FEEDS.all];
 
 /** RSS <author> needs an address; a no-reply one on the site's own domain. */
 const AUTHOR = `noreply@${new URL(config.siteUrl).hostname}`;

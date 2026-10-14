@@ -21,7 +21,7 @@ export default function PrivacyPage() {
       doc={PRIVACY.doc}
       rendered={PRIVACY.rendered}
       eyebrow={SITE.name}
-      footer={<LegalFooterLinks links={[{ to: "/terms", label: "使用规则" }, { to: "/feedback", label: "反馈页" }]} note={`隐私说明 ${PRIVACY.doc.meta["版本"] ?? ""} · ${PRIVACY.doc.meta["生效日期"] ?? ""}`} />}
+      footer={<LegalFooterLinks links={[{ to: "/terms", label: "使用规则" }]} note={`隐私说明 ${PRIVACY.doc.meta["版本"] ?? ""} · ${PRIVACY.doc.meta["生效日期"] ?? ""}`} />}
     />
   );
 }

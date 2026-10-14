@@ -6,7 +6,7 @@ import { Link, useRouteLoaderData } from "react-router";
 import { pageMeta } from "../lib/seo";
 import { ThemeSwitch } from "../components/shell/ThemeSwitch";
 import { ReaderRow } from "../components/shell/ReaderCard";
-import { IconBookmark, IconChart, IconChevronRight, IconClock, IconFlame, IconGrid, IconHeart, IconHistory, IconMessage, IconMoon, IconPlug } from "../components/icons";
+import { IconBookmark, IconChart, IconChevronRight, IconClock, IconFlame, IconHeart, IconHistory, IconMessage, IconMoon, IconPlug } from "../components/icons";
 
 /** Shared caches may keep this page for five minutes. */
 export function headers() {
@@ -19,42 +19,18 @@ export function meta() {
 
 type Row = { to: string; label: string; icon: ReactNode };
 
-const GROUPS: Array<{ title: string; rows: Row[] }> = [
-  {
-    title: "内容",
-    rows: [
-      { to: "/topics", label: "主题索引", icon: <IconGrid size={18} /> },
-      ...(FEATURES.leaderboard ? [{ to: "/leaderboard", label: "模型榜", icon: <IconChart size={18} /> }] : []),
-      ...(FEATURES.codexResetMonitor ? [{ to: "/codex-reset", label: "Tibo重置监控", icon: <IconHistory size={18} /> }] : []),
-      { to: "/agent", label: "Agent 接入", icon: <IconPlug size={18} /> },
-    ],
-  },
-  {
-    title: "偏好",
-    rows: [
-      { to: "/hot", label: "热点榜", icon: <IconFlame size={18} /> },
-      { to: "/starred", label: "收藏", icon: <IconBookmark size={18} /> },
-      { to: "/subscriptions", label: "订阅推送", icon: <IconClock size={18} /> },
-    ],
-  },
-  {
-    title: "关于",
-    rows: [
-      { to: "/about", label: `关于 ${SITE.name}`, icon: <IconHeart size={18} /> },
-      { to: "/changelog", label: "更新日志", icon: <IconHistory size={18} /> },
-      { to: "/feedback", label: "意见反馈", icon: <IconMessage size={18} /> },
-    ],
-  },
+// 2026-10-12：分组小标题去掉，入口平铺；daily/topics/agent/changelog/feedback 已下线。
+const ROWS: Row[] = [
+  { to: "/subscriptions", label: "订阅推送", icon: <IconClock size={18} /> },
+  { to: "/starred", label: "收藏", icon: <IconBookmark size={18} /> },
+  { to: "/about", label: `关于 ${SITE.name}`, icon: <IconHeart size={18} /> },
+  ...(FEATURES.hotRanking ? [{ to: "/hot", label: "热点榜", icon: <IconFlame size={18} /> }] : []),
+  ...(FEATURES.leaderboard ? [{ to: "/leaderboard", label: "模型榜", icon: <IconChart size={18} /> }] : []),
+  ...(FEATURES.codexResetMonitor ? [{ to: "/codex-reset", label: "Tibo重置监控", icon: <IconHistory size={18} /> }] : []),
+  ...(FEATURES.agentPack ? [{ to: "/agent", label: "Agent 接入", icon: <IconPlug size={18} /> }] : []),
+  ...(FEATURES.changelog ? [{ to: "/changelog", label: "更新日志", icon: <IconHistory size={18} /> }] : []),
+  ...(FEATURES.feedback ? [{ to: "/feedback", label: "意见反馈", icon: <IconMessage size={18} /> }] : []),
 ];
-
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="card overflow-hidden">
-      <div className="px-4 pb-1 pt-3 text-[11.5px] text-ink-4">{title}</div>
-      <ul className="divide-y divide-line-soft">{children}</ul>
-    </section>
-  );
-}
 
 export default function MorePage() {
   const root = useRouteLoaderData<{ reader: Reader | null }>("root");
@@ -67,9 +43,9 @@ export default function MorePage() {
         </div>
       )}
       <div className="space-y-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0 2xl:grid-cols-3">
-        {GROUPS.map((g) => (
-          <Group key={g.title} title={g.title}>
-            {g.rows.map((r) => (
+        <section className="card overflow-hidden">
+          <ul className="divide-y divide-line-soft">
+            {ROWS.map((r) => (
               <li key={r.to}>
                 <Link to={r.to} className="flex h-[50px] items-center gap-3 px-4 text-[15px] font-medium text-ink transition-colors active:bg-bg-sunk lg:hover:bg-bg-sunk">
                   <span className="text-ink-3">{r.icon}</span>
@@ -78,17 +54,15 @@ export default function MorePage() {
                 </Link>
               </li>
             ))}
-            {g.title === "偏好" && (
-              <li className="flex h-[58px] items-center gap-3 px-4 text-[15px] font-medium text-ink">
-                <span className="text-ink-3">
-                  <IconMoon size={18} />
-                </span>
-                <span className="flex-1">外观</span>
-                <ThemeSwitch className="w-[124px]" />
-              </li>
-            )}
-          </Group>
-        ))}
+            <li className="flex h-[58px] items-center gap-3 px-4 text-[15px] font-medium text-ink">
+              <span className="text-ink-3">
+                <IconMoon size={18} />
+              </span>
+              <span className="flex-1">外观</span>
+              <ThemeSwitch className="w-[124px]" />
+            </li>
+          </ul>
+        </section>
       </div>
       <div className="mt-5 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[12px] text-ink-4">
         <Link to="/terms" className="hover:text-ink-2">使用规则</Link>

@@ -13,7 +13,8 @@ export async function loadLlmsAvailability() {
            EXISTS (SELECT 1 FROM reports WHERE kind = 'weekly') AS "hasWeekly",
            EXISTS (SELECT 1 FROM reports WHERE kind = 'monthly') AS "hasMonthly",
            EXISTS (SELECT 1 FROM lb_runs WHERE status = 'published') AS "hasLeaderboard"`;
-  return row!;
+  // reports 页面随 FEATURES.dailyReport 下线（2026-10-12）——历史数据存在也不再暴露。
+  return { ...row!, hasDailies: row!.hasDailies && FEATURES.dailyReport, hasWeekly: row!.hasWeekly && FEATURES.dailyReport, hasMonthly: row!.hasMonthly && FEATURES.dailyReport };
 }
 
 export const PUBLIC_VERSIONS = {

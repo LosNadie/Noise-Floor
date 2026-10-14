@@ -18,6 +18,7 @@ import postgres from "postgres";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { identityKeyForUrl } from "@aihot/backend/lib/url";
+import { FEATURES } from "@aihot/industry/features";
 import { publishArticle, publishArticleTx } from "@aihot/backend/publication/publish";
 import { modelFor } from "@aihot/backend/editorial/models";
 import { chatJson } from "@aihot/backend/providers/llm";
@@ -420,7 +421,7 @@ if (withBody.length) {
 // grouping queue (embedding recall + confirm) so story pages keep living. A few dozen small
 // calls per day at an 8h cadence — bounded by how many items the upstream selects.
 
-if (true) { // always run: the self-heal query below picks up untagged selected items from past runs too
+if (FEATURES.topics) { // 2026-10-12: topics 栏目关闭 → 打标与事件分组（LLM 调用）一并停。开关重开即恢复（含 self-heal 补标）。
   // Self-heal: also pick up previously imported selected items that never got tags
   // (dedup anchor: the receipt written by this very step) and items not yet grouped.
   const staleTaggable = await sql<{ article_id: string }[]>`

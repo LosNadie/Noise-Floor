@@ -47,18 +47,22 @@ export const SCHEDULES: Scheduled[] = [
   { name: "hot.snapshot", cron: "2 * * * *", run: () => snapshotHeat() },
   { name: "stories.status", cron: "7 * * * *", run: refreshStoryStatuses },
   { name: "stories.links", cron: "12 * * * *", run: linkRelatedStories },
-  { name: "reports.daily", cron: "0 8 * * *", missed: "once", run: () => composeDaily(beijingDate(Date.now())) },
-  { name: "reports.weekly", cron: "0 10 * * 1", missed: "once", run: () => composeWeekly(isoWeekLabel(addDays(beijingDate(Date.now()), -7))) },
-  {
-    name: "reports.monthly",
-    cron: "30 10 1 * *",
-    missed: "once",
-    run: () => {
-      const [y, m] = beijingDate(Date.now()).split("-").map(Number) as [number, number];
-      return composeMonthly(m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`);
-    },
-  },
-  { name: "reports.catch-up", cron: "15 * * * *", run: () => catchUpReports() },
+  ...(FEATURES.dailyReport
+    ? [
+        { name: "reports.daily", cron: "0 8 * * *", missed: "once", run: () => composeDaily(beijingDate(Date.now())) },
+        { name: "reports.weekly", cron: "0 10 * * 1", missed: "once", run: () => composeWeekly(isoWeekLabel(addDays(beijingDate(Date.now()), -7))) },
+        {
+          name: "reports.monthly",
+          cron: "30 10 1 * *",
+          missed: "once",
+          run: () => {
+            const [y, m] = beijingDate(Date.now()).split("-").map(Number) as [number, number];
+            return composeMonthly(m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`);
+          },
+        },
+        { name: "reports.catch-up", cron: "15 * * * *", run: () => catchUpReports() },
+      ]
+    : []),
   { name: "ops.retention", cron: "30 3 * * *", missed: "once", run: () => dailyRetention() },
   { name: "sources.icons", cron: "40 4 * * *", missed: "once", run: () => refreshSourceIcons() },
   // IndexNow for new indexable pages (off unless INDEXNOW_SUBMIT_ENABLED).
@@ -74,7 +78,7 @@ export const SCHEDULES: Scheduled[] = [
   // One message with the follow-ups that do not touch readers (nothing when there are none).
   { name: "ops.digest", cron: "0 9 * * *", missed: "once", run: () => sendDigest() },
   // Feedback that did not reach the internal Feishu chat when it was sent (off with FEISHU_INTERNAL_ENABLED).
-  { name: "feedback.forward", cron: "*/15 * * * *", run: () => forwardPendingFeedback() },
+  ...(FEATURES.feedback ? [{ name: "feedback.forward", cron: "*/15 * * * *", run: () => forwardPendingFeedback() }] : []),
   ...(backupConfigured() ? [{ name: "ops.backup", cron: "10 4 * * *", missed: "once" as const, run: () => runBackup() }] : []),
   { name: "reports.source-health", cron: "0 9 * * 1", missed: "once", run: () => sourceHealthWeekly() },
   // Four upstream checks a day; a new run is published only when the evidence changed. With collection

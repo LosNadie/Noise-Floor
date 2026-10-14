@@ -21,7 +21,7 @@ export default function TermsPage() {
       doc={TERMS.doc}
       rendered={TERMS.rendered}
       eyebrow={SITE.name}
-      footer={<LegalFooterLinks links={[{ to: "/privacy", label: "隐私说明" }, { to: "/agent", label: "Agent 接入页" }]} note={`使用规则 ${TERMS.doc.meta["版本"] ?? ""} · ${TERMS.doc.meta["生效日期"] ?? ""}`} />}
+      footer={<LegalFooterLinks links={[{ to: "/privacy", label: "隐私说明" }]} note={`使用规则 ${TERMS.doc.meta["版本"] ?? ""} · ${TERMS.doc.meta["生效日期"] ?? ""}`} />}
     />
   );
 }

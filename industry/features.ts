@@ -8,4 +8,14 @@ export const FEATURES = {
   codexResetMonitor: false,
   /** 热点榜：多信源事件聚合的 /hot（要求至少两个独立信源）。当前仅单一转载源，撑不起来，默认关。 */
   hotRanking: false,
+  /** AI 日报/周报/月报（/daily*）：每天 LLM 撰写报告 + 补漏 + 日报 RSS。2026-10-12 关（砍栏目省 LLM）。 */
+  dailyReport: false,
+  /** 主题索引（/topics*）与 sync 的精选打标（LLM structure 调用）+ 事件分组入队。2026-10-12 关。 */
+  topics: false,
+  /** Agent 接入页（/agent 的 Skill 包说明与下载入口）。 */
+  agentPack: false,
+  /** 更新日志（/changelog）与导航未读点。 */
+  changelog: false,
+  /** 意见反馈（/feedback）与 Q助理 转发 cron。 */
+  feedback: false,
 } as const;

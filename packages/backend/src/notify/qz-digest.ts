@@ -1,7 +1,8 @@
-// The daily Q助理 digest for topic subscribers (worker schedule "qz.subscription.digest",
-// 08:30 Asia/Shanghai). For every reader who opted in — and connected the agent, which is what
-// the platform requires before a push can land — collect the last 24 hours of selected items
-// under their topics (an empty topic set means everything) and push one text message.
+// The daily Q助理 digest for readers who enabled the daily push (worker schedule
+// "qz.subscription.digest", 08:30 Asia/Shanghai). For every reader who opted in — and connected
+// the agent, which is what the platform requires before a push can land — collect ALL selected
+// items of the last 24 hours (no topic filtering since 2026-10-12: the toggle is on/off only) and
+// push one text message.
 //
 // The subscriptions page can also push the same digest on demand ("立即推送", through the api):
 // pushSubscriptionDigestNow below shares the item collection and the message format, but books
@@ -18,7 +19,6 @@ import { sql } from "../db.ts";
 import { beijingDate } from "@aihot/contracts/time";
 import { config } from "../config.ts";
 import { QzError, qzConfigured, qzPushMessage } from "../auth/qz.ts";
-import { loadTopicTags } from "../publication/topics.ts";
 
 export interface SubscriptionDigestOutcome {
   pushed: number;
@@ -29,7 +29,6 @@ export interface SubscriptionDigestOutcome {
 
 interface SubscriptionRow {
   q_uid: string;
-  topics: string[];
 }
 
 export interface DigestItem {
@@ -38,39 +37,28 @@ export interface DigestItem {
   summary: string | null;
 }
 
-/** The daily push window: everything selected in the last 24 hours. */
+/** The daily push window: everything selected in the last 24 hours, no topic filtering. */
 const WINDOW_MS = 24 * 3600_000;
-const MAX_ITEMS = 8;
 const DIGEST_TITLE = "Noise Floor 每日精选";
 
-/** Selected items of the last 24h under the reader's topics, best first. An empty topic set means everything. */
-export async function collectDigestItems(topics: string[], now: Date): Promise<DigestItem[]> {
+/** ALL selected items of the last 24h (topic filtering removed 2026-10-12), best first. */
+export async function collectDigestItems(now: Date): Promise<DigestItem[]> {
   const windowStart = new Date(now.getTime() - WINDOW_MS);
-  const tagLists = topics.length > 0
-    ? (await Promise.all(topics.map((slug) => loadTopicTags(slug)))).filter((t): t is string[] => t !== null)
-    : [];
-  const matchTags = [...new Set(tagLists.flat())];
-  return matchTags.length > 0
-    ? await sql<DigestItem[]>`
-        SELECT p.article_id, p.title, p.summary FROM publications p
-        WHERE p.visibility = 'public' AND p.selected AND p.visible_after <= ${now} AND p.timeline_at >= ${windowStart}
-          AND p.tags && ${matchTags}::text[]
-        ORDER BY p.score DESC NULLS LAST, p.timeline_at DESC LIMIT ${MAX_ITEMS}`
-    : await sql<DigestItem[]>`
-        SELECT p.article_id, p.title, p.summary FROM publications p
-        WHERE p.visibility = 'public' AND p.selected AND p.visible_after <= ${now} AND p.timeline_at >= ${windowStart}
-        ORDER BY p.score DESC NULLS LAST, p.timeline_at DESC LIMIT ${MAX_ITEMS}`;
+  return await sql<DigestItem[]>`
+    SELECT p.article_id, p.title, p.summary FROM publications p
+    WHERE p.visibility = 'public' AND p.selected AND p.visible_after <= ${now} AND p.timeline_at >= ${windowStart}
+    ORDER BY p.score DESC NULLS LAST, p.timeline_at DESC`;
 }
 
 /** The one text message a digest push carries; identical for the morning job and a manual push.
  * The Q助理 client renders markdown (**bold**, [text](url), lists) but not HTML — verified live. */
 export function buildDigestMessage(items: DigestItem[]): string {
   return [
-    `**过去 24 小时你关注领域的精选**（${items.length} 条）`,
+    `**过去 24 小时的精选**（${items.length} 条）`,
     "",
     ...items.map((it, i) => `${i + 1}. ${it.title}`),
     "",
-    `[打开今日日报 →](${config.siteUrl}/daily)`,
+    `[打开精选 →](${config.siteUrl}/)`,
   ].join("\n");
 }
 
@@ -79,7 +67,7 @@ export async function runQzSubscriptionDigest(now = new Date()): Promise<Subscri
   const dateKey = beijingDate(now);
 
   const subs = await sql<SubscriptionRow[]>`
-    SELECT s.q_uid, s.topics FROM qz_subscriptions s
+    SELECT s.q_uid FROM qz_subscriptions s
     JOIN qz_users u ON u.q_uid = s.q_uid
     WHERE s.enabled AND u.is_connected_agent
       AND (s.last_push_date IS NULL OR s.last_push_date < ${dateKey})
@@ -101,7 +89,7 @@ export async function runQzSubscriptionDigest(now = new Date()): Promise<Subscri
         continue;
       }
 
-      const items = await collectDigestItems(sub.topics, now);
+      const items = await collectDigestItems(now);
       if (items.length === 0) {
         // Nothing to say today: book the reader for the day so they are not re-scanned.
         await sql`INSERT INTO qz_pushes (message_id, q_uid, date_key, status, detail)
@@ -115,9 +103,8 @@ export async function runQzSubscriptionDigest(now = new Date()): Promise<Subscri
         qUid: sub.q_uid,
         title: DIGEST_TITLE,
         message: buildDigestMessage(items),
-        url: `${config.siteUrl}/daily`,
+        url: `${config.siteUrl}/`,
         messageId,
-        importance: 1,
       });
       await sql`INSERT INTO qz_pushes (message_id, q_uid, date_key, status) VALUES (${messageId}, ${sub.q_uid}, ${dateKey}, 'sent') ON CONFLICT DO NOTHING`;
       await sql`UPDATE qz_subscriptions SET last_push_date = ${dateKey} WHERE q_uid = ${sub.q_uid}`;
@@ -149,8 +136,8 @@ export async function pushSubscriptionDigestNow(qUid: string, now = new Date()):
   if (!qzConfigured()) return { sent: false, items: 0, reason: "not_configured" };
   const dateKey = beijingDate(now);
 
-  const rows = await sql<{ topics: string[]; enabled: boolean; is_connected_agent: boolean }[]>`
-    SELECT s.topics, s.enabled, u.is_connected_agent
+  const rows = await sql<{ enabled: boolean; is_connected_agent: boolean }[]>`
+    SELECT s.enabled, u.is_connected_agent
     FROM qz_subscriptions s JOIN qz_users u ON u.q_uid = s.q_uid
     WHERE s.q_uid = ${qUid} LIMIT 1`;
   const sub = rows[0];
@@ -167,7 +154,7 @@ export async function pushSubscriptionDigestNow(qUid: string, now = new Date()):
 
   // A fresh id per attempt: unlike the daily digest, each press is its own message.
   const messageId = `manual-${dateKey}-${qUid}-${randomBytes(6).toString("hex")}`.replace(/[^A-Za-z0-9._~-]/g, "").slice(0, 64);
-  const items = await collectDigestItems(sub.topics, now);
+  const items = await collectDigestItems(now);
   if (items.length === 0) {
     // Booked anyway, so the cooldown holds and the attempt is on record.
     await sql`INSERT INTO qz_pushes (message_id, q_uid, date_key, status, detail)
@@ -180,9 +167,8 @@ export async function pushSubscriptionDigestNow(qUid: string, now = new Date()):
       qUid,
       title: DIGEST_TITLE,
       message: buildDigestMessage(items),
-      url: `${config.siteUrl}/daily`,
+      url: `${config.siteUrl}/`,
       messageId,
-      importance: 1,
     });
   } catch (error) {
     const detail = error instanceof QzError

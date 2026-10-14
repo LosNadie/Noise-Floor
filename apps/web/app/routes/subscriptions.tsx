@@ -1,8 +1,7 @@
-// Subscription settings: which topics the daily Q助理 digest should cover for this reader.
-// The page is client-driven on purpose — the api owns the subscription row, the browser already
-// carries the session cookie, and the topic list is a public endpoint, so a loader would only add
-// a server round-trip the client can do itself.
-import { SITE } from "@aihot/industry/site";
+// Daily-push settings: a single on/off toggle for the morning Q助理 digest.
+// The page is client-driven on purpose — the api owns the subscription row and the browser already
+// carries the session cookie. Topic filtering was removed on 2026-10-12: the toggle is the only
+// setting, it saves immediately on change, and the manual "立即推送" button stays.
 import { redirect } from "react-router";
 import { useEffect, useState } from "react";
 import type { Route } from "./+types/subscriptions";
@@ -24,23 +23,9 @@ export function meta() {
 
 export const headers: Route.HeadersFunction = () => ({ "Cache-Control": "no-store" });
 
-interface TopicOption {
-  slug: string;
-  name: string;
-  group: string;
-}
-interface SubscriptionState {
-  topics: string[];
-  enabled: boolean;
-}
-
-const GROUP_LABELS: Record<string, string> = { company: "公司 / 产品", field: "技术领域", genre: "内容类型" };
-const MAX_TOPICS = 12;
-
 export default function SubscriptionsPage() {
-  const [topics, setTopics] = useState<TopicOption[]>([]);
-  const [state, setState] = useState<SubscriptionState | null>(null);
-  const [phase, setPhase] = useState<"loading" | "ready" | "saving" | "saved" | "error">("loading");
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pushPhase, setPushPhase] = useState<"idle" | "pushing" | "pushed" | "push-error">("idle");
   const [pushMessage, setPushMessage] = useState<string | null>(null);
@@ -49,21 +34,15 @@ export default function SubscriptionsPage() {
     let alive = true;
     (async () => {
       try {
-        const [topicRes, subRes] = await Promise.all([
-          fetch("/api/site/topics"),
-          fetch("/api/me/subscription"),
-        ]);
+        const res = await fetch("/api/me/subscription");
         if (!alive) return;
-        if (!topicRes.ok || !subRes.ok) throw new Error("读取订阅设置失败，请稍后再试。");
-        const topicData = (await topicRes.json()) as { topics: TopicOption[] };
-        const subData = (await subRes.json()) as SubscriptionState;
-        setTopics(topicData.topics ?? []);
-        setState({ topics: subData.topics ?? [], enabled: subData.enabled ?? false });
-        setPhase("ready");
+        if (!res.ok) throw new Error("读取推送设置失败，请稍后再试。");
+        const data = (await res.json()) as { enabled?: boolean };
+        setEnabled(data.enabled ?? false);
       } catch (e) {
         if (!alive) return;
         setError(String((e as Error).message ?? e));
-        setPhase("error");
+        setEnabled(false);
       }
     })();
     return () => {
@@ -71,41 +50,30 @@ export default function SubscriptionsPage() {
     };
   }, []);
 
-  const toggle = (slug: string) => {
-    setState((s) => {
-      if (!s) return s;
-      const has = s.topics.includes(slug);
-      if (!has && s.topics.length >= MAX_TOPICS) return s;
-      return { ...s, topics: has ? s.topics.filter((t) => t !== slug) : [...s.topics, slug] };
-    });
-    setPhase("ready");
-  };
-
-  const save = async () => {
-    if (!state) return;
-    setPhase("saving");
+  // The toggle saves itself immediately; on failure it rolls back and says why.
+  const setDailyPush = async (next: boolean) => {
+    if (saving) return;
+    const prev = enabled;
+    setEnabled(next);
+    setSaving(true);
     setError(null);
     try {
       const res = await fetch("/api/me/subscription", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topics: state.topics, enabled: state.enabled }),
+        body: JSON.stringify({ enabled: next }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(body?.message ?? "保存失败，请稍后再试。");
+        const body = (await res.json().catch(() => null)) as { detail?: string; message?: string } | null;
+        throw new Error(body?.detail ?? body?.message ?? "保存失败，请稍后再试。");
       }
-      setPhase("saved");
-      setTimeout(() => setPhase("ready"), 1800);
     } catch (e) {
+      setEnabled(prev);
       setError(String((e as Error).message ?? e));
-      setPhase("error");
+    } finally {
+      setSaving(false);
     }
   };
-
-  const byGroup = (grp: string) => topics.filter((t) => t.group === grp);
-  const dirty = phase === "ready" || phase === "error";
-  const atLimit = state ? state.topics.length >= MAX_TOPICS : false;
 
   // Push the current digest through Q助理 right away; the api says a rejection in the reader's language.
   const pushNow = async () => {
@@ -129,85 +97,39 @@ export default function SubscriptionsPage() {
       setPushMessage(String((e as Error).message ?? e));
     }
   };
-  const pushDisabled = pushPhase === "pushing" || !state?.enabled;
+  const pushDisabled = pushPhase === "pushing" || enabled !== true;
 
   return (
     <div className="mx-auto max-w-[var(--page-max-reading)] pb-10">
       <h1 className="pb-4 pt-5 text-[22px] font-bold text-ink lg:pt-1">订阅推送</h1>
       <p className="text-[14px] leading-relaxed text-ink-2">
-        每天早上 8:30，把过去 24 小时内你关注主题的精选内容，通过 Q助理 推送给你。
-        最多关注 {MAX_TOPICS} 个主题；不选任何主题并开启订阅，则推送全站精选。
+        开启后，每天早上 8:30 会把过去 24 小时内的全部精选内容，通过 Q助理 推送给你。
       </p>
 
-      {phase === "loading" && <p className="mt-8 text-[14px] text-ink-3">正在读取…</p>}
-      {phase === "error" && <p className="mt-6 text-[14px] text-red-500">{error}</p>}
-
-      {state && (
+      {enabled === null ? (
+        <p className="mt-8 text-[14px] text-ink-3">正在读取…</p>
+      ) : (
         <div className="mt-6 space-y-5">
-          {(["company", "field", "genre"] as const).map((grp) => {
-            const list = byGroup(grp);
-            if (list.length === 0) return null;
-            return (
-              <section key={grp}>
-                <h2 className="mb-2 text-[13px] font-medium text-ink-3">{GROUP_LABELS[grp] ?? grp}</h2>
-                <div className="flex flex-wrap gap-2">
-                  {list.map((t) => {
-                    const on = state.topics.includes(t.slug);
-                    const blocked = !on && atLimit;
-                    return (
-                      <button
-                        key={t.slug}
-                        type="button"
-                        onClick={() => toggle(t.slug)}
-                        disabled={blocked && phase !== "loading"}
-                        className={`rounded-full border px-3.5 py-1.5 text-[13.5px] transition-colors ${
-                          on
-                            ? "border-transparent bg-accent text-accent-contrast"
-                            : blocked
-                              ? "border-line-soft text-ink-4 opacity-50"
-                              : "border-line-soft text-ink-2 hover:border-ink-3 hover:text-ink"
-                        }`}
-                      >
-                        {t.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
-
           <label className="flex items-center gap-3 rounded-2xl border border-line-soft p-4">
             <input
               type="checkbox"
-              checked={state.enabled}
-              onChange={(e) => {
-                setState((s) => (s ? { ...s, enabled: e.target.checked } : s));
-                setPhase("ready");
-              }}
+              checked={enabled}
+              disabled={saving}
+              onChange={(e) => setDailyPush(e.target.checked)}
               className="h-4 w-4 accent-[var(--accent)]"
             />
             <span className="text-[14.5px] text-ink">
               开启每日推送
               <span className="block text-[12.5px] text-ink-3">
-                {state.topics.length === 0 && state.enabled
-                  ? "当前未选主题，开启后将推送全站精选。"
-                  : state.topics.length > 0
-                    ? `将推送 ${state.topics.length} 个主题下的精选内容。`
-                    : "先选择至少一个主题。"}
+                {enabled ? "已开启：每天早上 8:30 推送过去 24 小时的全部精选。" : "已关闭：不会收到每日推送。"}
               </span>
             </span>
+            {saving && <span className="ml-auto text-[12px] text-ink-3">保存中…</span>}
           </label>
 
+          {error && <p className="text-[13px] text-red-500">{error}</p>}
+
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={save}
-              disabled={!dirty || (state.enabled && state.topics.length === 0)}
-              className={buttonClass("primary")}
-            >
-              {phase === "saving" ? "保存中…" : phase === "saved" ? "已保存 ✓" : "保存订阅设置"}
-            </button>
             <button
               type="button"
               onClick={pushNow}

@@ -231,8 +231,8 @@ export default function AboutPage() {
           <Link to="/" prefetch="intent" className={buttonClass("primary", "lg")}>
             看今天的精选 <IconArrowRight size={15} />
           </Link>
-          <Link to="/daily" prefetch="intent" className={buttonClass("secondary", "lg")}>
-            读最新{withSubject("日报")}
+          <Link to="/all" prefetch="intent" className={buttonClass("secondary", "lg")}>
+            浏览全部{withSubject("动态")}
           </Link>
         </div>
       </header>
