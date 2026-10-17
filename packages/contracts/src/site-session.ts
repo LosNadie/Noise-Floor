@@ -6,7 +6,8 @@
 // so rotating that secret signs every reader out.
 //
 // The gate is deliberately a *policy* in one place: `loginExempt` below is the single list of paths
-// that stay reachable without a session.
+// that stay reachable without a session, and `readerOnly` the single list of paths that need one even
+// on an otherwise open site.
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
@@ -114,6 +115,20 @@ const EXEMPT_PREFIXES = ["/assets/", "/api/auth/", "/api/admin/", "/admin", "/ai
 export function loginExempt(pathname: string): boolean {
   if (EXEMPT_EXACT.includes(pathname)) return true;
   return EXEMPT_PREFIXES.some((prefix) => pathname === prefix.replace(/\/$/, "") || pathname.startsWith(prefix));
+}
+
+/**
+ * Paths that need a session even when the site as a whole is open. Only the subscription page so far:
+ * a subscription belongs to a q_uid, so without a session there is nothing to show. Nothing else is
+ * reader-only — the items, topics, feeds and the public api stay readable to anonymous visitors.
+ */
+const READER_ONLY = ["/subscriptions", "/api/me/subscription"];
+
+export function readerOnly(pathname: string): boolean {
+  // A single-fetch data request carries the page's `.data` suffix; the page decides who may read it,
+  // the suffix does not.
+  const path = pathname.endsWith(".data") ? pathname.slice(0, -".data".length) : pathname;
+  return READER_ONLY.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 /**

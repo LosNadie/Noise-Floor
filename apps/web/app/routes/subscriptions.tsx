@@ -1,20 +1,25 @@
 // Daily-push settings: a single on/off toggle for the morning Q助理 digest.
 // The page is client-driven on purpose — the api owns the subscription row and the browser already
 // carries the session cookie. Topic filtering was removed on 2026-10-12: the toggle is the only
-// setting, it saves immediately on change, and the manual "立即推送" button stays.
-import { redirect } from "react-router";
+// setting, it saves immediately on change, and the manual "立即推送" button stays. The one thing the
+// loader decides is the way in: this is a reader-only page, so without a session the reader is sent
+// to sign in — or, on a site that offers no sign-in at all, told why the page cannot work here.
+import { redirect, useLoaderData } from "react-router";
 import { useEffect, useState } from "react";
 import type { Route } from "./+types/subscriptions";
 import { pageMeta } from "../lib/seo";
+import { apiGet } from "../lib/api.server";
 import { readerOf } from "../lib/reader.server";
 import { buttonClass } from "../components/ui/Controls";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  if (!readerOf(request)) {
-    const url = new URL(request.url);
-    throw redirect(`/login?return=${encodeURIComponent(url.pathname)}`);
-  }
-  return null;
+  if (readerOf(request)) return { signInReady: true };
+  // Sign-in is the only way in, so send the reader there — unless this site cannot sign anyone in,
+  // where the redirect would be a dead end and the page explains itself instead.
+  const options = await apiGet<{ enabled: boolean }>("/api/auth/qz/options", { signal: request.signal }).catch(() => null);
+  if (!options?.enabled) return { signInReady: false };
+  const url = new URL(request.url);
+  throw redirect(`/login?return=${encodeURIComponent(url.pathname)}`);
 }
 
 export function meta() {
@@ -24,6 +29,7 @@ export function meta() {
 export const headers: Route.HeadersFunction = () => ({ "Cache-Control": "no-store" });
 
 export default function SubscriptionsPage() {
+  const { signInReady } = useLoaderData<typeof loader>();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +37,7 @@ export default function SubscriptionsPage() {
   const [pushMessage, setPushMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!signInReady) return;
     let alive = true;
     (async () => {
       try {
@@ -48,7 +55,7 @@ export default function SubscriptionsPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [signInReady]);
 
   // The toggle saves itself immediately; on failure it rolls back and says why.
   const setDailyPush = async (next: boolean) => {
@@ -98,6 +105,20 @@ export default function SubscriptionsPage() {
     }
   };
   const pushDisabled = pushPhase === "pushing" || enabled !== true;
+
+  if (!signInReady) {
+    return (
+      <div className="mx-auto max-w-[var(--page-max-reading)] pb-10">
+        <h1 className="pb-4 pt-5 text-[22px] font-bold text-ink lg:pt-1">订阅推送</h1>
+        <p className="text-[14px] leading-relaxed text-ink-2">
+          开启后，每天早上 8:30 会把过去 24 小时内的全部精选内容，通过 Q助理 推送给你。
+        </p>
+        <p className="mt-6 rounded-2xl border border-line-soft p-4 text-[13.5px] leading-relaxed text-ink-2">
+          订阅要绑定到你的 Q助理 账号，所以需要先用 Q助理 登录。这个站点还没有配置 Q助理 登录，请联系管理员。
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[var(--page-max-reading)] pb-10">

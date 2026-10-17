@@ -2,7 +2,7 @@ import { FEATURES } from "@aihot/industry/features";
 import Fastify, { type FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { OAUTH_PROBE_PATHS, resolveRedirect } from "@aihot/contracts/http-policy";
-import { loginExempt, readSiteSession } from "@aihot/contracts/site-session";
+import { loginExempt, readerOnly, readSiteSession } from "@aihot/contracts/site-session";
 import { qzGateOn } from "@aihot/backend/auth/qz";
 import { sql } from "@aihot/backend/db";
 import { registerSite } from "./routes/site.ts";
@@ -64,6 +64,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   // The reader gate. With QZ_REQUIRE_LOGIN on, everything the reader can see needs a session; the
   // sign-in machinery, the console and the assets the sign-in page needs are listed in `loginExempt`.
   // It runs after the redirect table so legacy addresses still redirect rather than bounce to sign-in.
+  // The reader-only endpoints (`/api/me/subscription*`) check the session themselves, so on an open
+  // site they still answer in their own words instead of bouncing to sign-in.
   app.addHook("onRequest", async (req, reply) => {
     if (!qzGateOn()) return;
     const raw = req.raw.url ?? "/";
@@ -78,12 +80,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     return sendProblem(req, reply, { status: 401, code: "unauthorized", detail: "Sign in with Q助理 to read this site." });
   });
 
-  // A gated page belongs to one reader, so no shared cache may keep it — whatever the route asked for.
+  // A gated or reader-only answer belongs to one reader, so no shared cache may keep it — whatever the
+  // route asked for.
   app.addHook("onSend", async (req, reply) => {
-    if (!qzGateOn()) return;
     const raw = req.raw.url ?? "/";
     const qi = raw.indexOf("?");
-    if (loginExempt(qi >= 0 ? raw.slice(0, qi) : raw)) return;
+    const pathname = qi >= 0 ? raw.slice(0, qi) : raw;
+    if (loginExempt(pathname)) return;
+    if (!qzGateOn() && !readerOnly(pathname)) return;
     reply.header("Cache-Control", "private, no-store");
     reply.header("X-Accel-Expires", "0");
   });

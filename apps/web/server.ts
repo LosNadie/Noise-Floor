@@ -8,22 +8,25 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { createRequestListener } from "@react-router/node";
 import { isApiOwned, resolveRedirect } from "@aihot/contracts/http-policy";
-import { loginExempt, readSiteSession } from "@aihot/contracts/site-session";
+import { loginExempt, readerOnly, readSiteSession } from "@aihot/contracts/site-session";
 
 const PORT = Number(process.env.WEB_PORT || process.env.PORT || 3000);
 const HOST = process.env.WEB_HOST || "127.0.0.1";
 const API = new URL(process.env.API_BASE_URL || "http://127.0.0.1:3001");
 /**
- * Whether the whole site is behind Q助理 sign-in. The session cookie is verified here, in this process,
- * so a gated page costs no extra round-trip; the api enforces the same gate for what it serves.
- * It closes only when sign-in can actually be completed — a missing AppKey must never lock everyone out
- * of a site nobody can sign in to. Mirrors `qzGateOn` in packages/backend/src/auth/qz.ts.
+ * Whether a visitor can actually sign in here. The session cookie is verified in this process, so a
+ * gated page costs no extra round-trip; the api enforces the same rule for what it serves. Sign-in is
+ * offered only when it is switched on *and* the application credentials are present — a missing
+ * AppKey must never lock everyone out of a site nobody can sign in to. Mirrors `qzConfigured` /
+ * `qzGateOn` in packages/backend/src/auth/qz.ts.
  */
-const REQUIRE_LOGIN =
-  ["1", "true"].includes((process.env.QZ_REQUIRE_LOGIN ?? "").trim().toLowerCase()) &&
+const LOGIN_AVAILABLE =
   ["1", "true"].includes((process.env.QZ_LOGIN_ENABLED ?? "").trim().toLowerCase()) &&
   !!process.env.QZ_APP_KEY &&
   !!process.env.QZ_APP_SECRET;
+/** Whether the *whole* site is behind sign-in; the reader-only pages below are gated on their own. */
+const REQUIRE_LOGIN =
+  LOGIN_AVAILABLE && ["1", "true"].includes((process.env.QZ_REQUIRE_LOGIN ?? "").trim().toLowerCase());
 /**
  * Whether a reverse proxy in front (Caddy, nginx) records the visitor in X-Forwarded-For. Without one
  * the header is never believed: a visitor could name any address and slip past the api's per-visitor
@@ -94,8 +97,9 @@ function pageCache(req: import("node:http").IncomingMessage, res: import("node:h
   const url = new URL(req.url ?? "/", "http://web.local");
   const pathname = decodeURIComponent(url.pathname).replace(/\.data$/, "");
   // A gated page belongs to one reader, so it is never shareable: with the gate on, every response is
-  // private even where the route asked for a shared cache.
-  const publicRead = !REQUIRE_LOGIN && (req.method === "GET" || req.method === "HEAD") && !/^\/admin(?:\/|$)/i.test(pathname);
+  // private even where the route asked for a shared cache, and the reader-only pages are private even
+  // though the rest of the site is open.
+  const publicRead = !REQUIRE_LOGIN && !readerOnly(pathname) && (req.method === "GET" || req.method === "HEAD") && !/^\/admin(?:\/|$)/i.test(pathname);
   if (publicRead && url.pathname.endsWith(".data")) {
     url.searchParams.delete("_routes");
     req.url = url.pathname + url.search;
@@ -164,11 +168,15 @@ async function handle(req: import("node:http").IncomingMessage, res: import("nod
     return req.pipe(upstream);
   }
 
-  // The reader gate for everything this process renders. Api-owned paths are left to the api, which
-  // applies the same rule and can answer in its own error shape.
-  if (REQUIRE_LOGIN && !loginExempt(pathname) && !readSiteSession(req.headers.cookie)) {
+  // The reader gate for everything this process renders. `QZ_REQUIRE_LOGIN` closes the whole site; the
+  // reader-only pages (the subscription page) need a session on their own. Api-owned paths are left to
+  // the api, which applies the same rule and can answer in its own error shape.
+  const gated = REQUIRE_LOGIN || (readerOnly(pathname) && LOGIN_AVAILABLE);
+  if (gated && !loginExempt(pathname) && !readSiteSession(req.headers.cookie)) {
+    // A single-fetch data request is not a page: after signing in the reader wants the page itself.
+    const returnTo = raw.replace(/\.data(\?|$)/, "$1").slice(0, 2000);
     res.statusCode = 302;
-    res.setHeader("Location", `/login?${new URLSearchParams({ return: raw.slice(0, 2000) })}`);
+    res.setHeader("Location", `/login?${new URLSearchParams({ return: returnTo })}`);
     res.setHeader("Cache-Control", "no-store");
     return res.end();
   }

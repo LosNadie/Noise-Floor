@@ -66,6 +66,8 @@ export const config = {
    * Reader sign-in with Q助理. `QZ_LOGIN_ENABLED` offers the sign-in button; `QZ_REQUIRE_LOGIN` closes
    * the whole site behind it. They are separate so the integration can be tried on a public site first.
    * Without AppKey/AppSecret neither does anything, so an unconfigured deployment stays open.
+   * The reader-only pages (the subscription page, `readerOnly` in packages/contracts/src/site-session.ts)
+   * need a session whatever these say: a subscription belongs to a q_uid.
    */
   qzLoginEnabled: bool("QZ_LOGIN_ENABLED", false),
   qzRequireLogin: bool("QZ_REQUIRE_LOGIN", false),
