@@ -213,10 +213,10 @@ test("the edge may keep a page longer than browsers, which a withdrawal purge ca
 });
 
 test("browser caching preserves noindex and private sign-in responses", async () => {
-  const feedback = await fetch(origin + "/feedback");
-  assert.equal(feedback.status, 200);
-  assert.match(await feedback.text(), /name="robots" content="noindex/);
-  assert.equal(feedback.headers.get("Cache-Control"), "public, max-age=300, s-maxage=300, must-revalidate");
+  const starred = await fetch(origin + "/starred");
+  assert.equal(starred.status, 200);
+  assert.match(await starred.text(), /name="robots" content="noindex/);
+  assert.equal(starred.headers.get("Cache-Control"), "public, max-age=300, s-maxage=300, must-revalidate");
   const login = await fetch(origin + "/admin/login");
   assert.equal(login.status, 200);
   assert.equal(login.headers.get("Cache-Control"), "private, no-store");

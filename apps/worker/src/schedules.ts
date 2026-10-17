@@ -49,12 +49,12 @@ export const SCHEDULES: Scheduled[] = [
   { name: "stories.links", cron: "12 * * * *", run: linkRelatedStories },
   ...(FEATURES.dailyReport
     ? [
-        { name: "reports.daily", cron: "0 8 * * *", missed: "once", run: () => composeDaily(beijingDate(Date.now())) },
-        { name: "reports.weekly", cron: "0 10 * * 1", missed: "once", run: () => composeWeekly(isoWeekLabel(addDays(beijingDate(Date.now()), -7))) },
+        { name: "reports.daily", cron: "0 8 * * *", missed: "once" as const, run: () => composeDaily(beijingDate(Date.now())) },
+        { name: "reports.weekly", cron: "0 10 * * 1", missed: "once" as const, run: () => composeWeekly(isoWeekLabel(addDays(beijingDate(Date.now()), -7))) },
         {
           name: "reports.monthly",
           cron: "30 10 1 * *",
-          missed: "once",
+          missed: "once" as const,
           run: () => {
             const [y, m] = beijingDate(Date.now()).split("-").map(Number) as [number, number];
             return composeMonthly(m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`);
