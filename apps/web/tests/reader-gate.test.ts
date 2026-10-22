@@ -51,13 +51,22 @@ async function startWeb(env: Record<string, string>): Promise<Web> {
 test("the subscription page asks for sign-in on its own; every other page stays open", async () => {
   const site = await startWeb({ ...SIGN_IN_OFFERED, QZ_REQUIRE_LOGIN: "false" });
   try {
-    // The client-side navigation goes to the `.data` suffix, and both ways in land on the page.
-    for (const path of ["/subscriptions", "/subscriptions.data"]) {
-      const res = await fetch(`${site.origin}${path}`, { redirect: "manual" });
-      assert.equal(res.status, 302, path);
-      assert.equal(res.headers.get("location"), `/login?return=${encodeURIComponent("/subscriptions")}`);
-      await res.text();
-    }
+    // Entering by URL is a document request and takes a plain 302 to sign-in.
+    const doc = await fetch(`${site.origin}/subscriptions`, { redirect: "manual" });
+    assert.equal(doc.status, 302);
+    assert.equal(doc.headers.get("location"), `/login?return=${encodeURIComponent("/subscriptions")}`);
+    await doc.text();
+
+    // Client-side navigation asks the `.data` suffix. That is not a page: the gate must answer in the
+    // single-fetch protocol (a 204 carrying the redirect + reload-document), or the client would try
+    // to decode the login HTML as stream data. Both ways in land on sign-in, and on the plain page.
+    const data = await fetch(`${site.origin}/subscriptions.data?_routes=routes%2Fsubscriptions`, { redirect: "manual" });
+    assert.equal(data.status, 204);
+    assert.equal(data.headers.get("x-remix-redirect"), `/login?return=${encodeURIComponent("/subscriptions")}`);
+    assert.equal(data.headers.get("x-remix-status"), "302");
+    assert.equal(data.headers.get("x-remix-reload-document"), "true");
+    assert.equal(data.headers.get("location"), null);
+    await data.text();
     const about = await fetch(`${site.origin}/about`, { redirect: "manual" });
     assert.notEqual(about.status, 302, "an open site must not bounce a public page to sign-in");
     await about.text();

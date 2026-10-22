@@ -7,7 +7,14 @@ import { FEATURES } from "@aihot/industry/features";
 const at = process.argv.indexOf("--base");
 const base = (at > 0 ? process.argv[at + 1] : process.env.SITE_URL) ?? "http://localhost:3000";
 
-const PAGES = ["/", "/all", "/daily", "/daily/archive", "/topics", "/starred", "/agent", "/about", "/changelog", "/feedback", "/terms", "/privacy", "/more", "/admin/login"];
+const PAGES = ["/", "/all", "/starred", "/about", "/terms", "/privacy", "/more", "/admin/login"];
+// Section pages join the list only while their module is on (same rule as the leaderboard below):
+// when industry/features.ts cuts a section its routes answer 404, and the smoke check must not ask.
+if (FEATURES.dailyReport) PAGES.push("/daily", "/daily/archive");
+if (FEATURES.topics) PAGES.push("/topics");
+if (FEATURES.agentPack) PAGES.push("/agent");
+if (FEATURES.changelog) PAGES.push("/changelog");
+if (FEATURES.feedback) PAGES.push("/feedback");
 const MACHINE: Array<[path: string, type: RegExp]> = [
   ["/api/health", /json/],
   ["/api/v1/items", /json/],
