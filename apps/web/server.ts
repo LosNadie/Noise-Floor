@@ -173,11 +173,25 @@ async function handle(req: import("node:http").IncomingMessage, res: import("nod
   // the api, which applies the same rule and can answer in its own error shape.
   const gated = REQUIRE_LOGIN || (readerOnly(pathname) && LOGIN_AVAILABLE);
   if (gated && !loginExempt(pathname) && !readSiteSession(req.headers.cookie)) {
-    // A single-fetch data request is not a page: after signing in the reader wants the page itself.
-    const returnTo = raw.replace(/\.data(\?|$)/, "$1").slice(0, 2000);
-    res.statusCode = 302;
-    res.setHeader("Location", `/login?${new URLSearchParams({ return: returnTo })}`);
+    // A single-fetch data request is not a page: answer it with the data-protocol redirect instead of a
+    // bare 302, or the browser would follow it and hand the client the login HTML to decode as stream
+    // data. After signing in the reader wants the page itself, so return is always the plain document.
+    const url = new URL(raw, "http://web.local");
+    const isData = url.pathname.endsWith(".data");
+    url.pathname = url.pathname.replace(/\.data$/, "") || "/";
+    url.searchParams.delete("_routes");
+    const returnTo = (url.pathname + url.search).slice(0, 2000);
+    const target = `/login?${new URLSearchParams({ return: returnTo })}`;
     res.setHeader("Cache-Control", "no-store");
+    if (isData) {
+      res.statusCode = 204;
+      res.setHeader("X-Remix-Redirect", target);
+      res.setHeader("X-Remix-Status", "302");
+      res.setHeader("X-Remix-Reload-Document", "true");
+      return res.end();
+    }
+    res.statusCode = 302;
+    res.setHeader("Location", target);
     return res.end();
   }
 
