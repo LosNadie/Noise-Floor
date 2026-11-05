@@ -16,6 +16,7 @@
 //      RETRY_ATTEMPTS (default 4).
 import postgres from "postgres";
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { identityKeyForUrl } from "@aihot/backend/lib/url";
 import { FEATURES } from "@aihot/industry/features";
@@ -36,6 +37,38 @@ const UA = process.env.UA || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb
 // fetchRetry so a single bad 回源 does not kill the run. RETRY_ATTEMPTS=1 disables retrying.
 const RETRY_ATTEMPTS = Math.max(1, Number(process.env.RETRY_ATTEMPTS || 4));
 const sql = postgres(process.env.DATABASE_URL!, { max: 2 });
+
+// ---- taste: local selection against the owner's own profile (2026-11-05) ----
+// Upstream `selected` was a borrowed editorial call. When a taste profile is active, the site's
+// curation is produced HERE: every new item gets one small model call scored against the owner's
+// written taste, newest first, up to a rolling-24h cap. The profile is a plain JSON file on the
+// host, bind-mounted read-only at /taste/profile.json — editing it needs NO rebuild, and the next
+// sync run picks it up. While the file is absent/disabled, everything below is inert and the old
+// upstream-replay behaviour stays byte-for-byte identical.
+const TasteCfgSchema = z.object({
+  enabled: z.boolean().default(false),
+  criteria: z.string().default(""),
+  daily_cap: z.number().int().min(1).max(100).default(10),
+  min_score: z.number().int().min(0).max(100).default(65),
+});
+type TasteResult =
+  | { on: false; why: string }
+  | { on: true; cfg: z.infer<typeof TasteCfgSchema> };
+function loadTaste(): TasteResult {
+  const p = process.env.TASTE_FILE
+    ?? (existsSync("/taste/profile.json") ? "/taste/profile.json" : "/var/www/noisefloor/taste/profile.json");
+  try {
+    if (!existsSync(p)) return { on: false, why: `no profile at ${p}` };
+    const cfg = TasteCfgSchema.parse(JSON.parse(readFileSync(p, "utf8")));
+    if (!cfg.enabled) return { on: false, why: "enabled=false" };
+    if (cfg.criteria.trim().length < 10) return { on: false, why: "criteria is empty — the owner has not written the profile yet" };
+    return { on: true, cfg };
+  } catch (err) {
+    return { on: false, why: `unreadable profile: ${(err as Error).message}` };
+  }
+}
+const taste = loadTaste();
+const TASTE_MAX = Math.max(1, Number(process.env.TASTE_MAX || 250)); // judgments per run, bound the 30-min cron window
 
 async function fetchRetry(url: string, init: RequestInit, label: string): Promise<Response> {
   let lastError: unknown = null;
@@ -315,7 +348,7 @@ for (const item of items) {
           title_zh, summary_zh, reason_zh, score, selected)
         VALUES (${articleId}, 1, 'replay', 'aihot-replay', 'pass', ${item.category ?? null}, '{}'::text[],
           ${item.title.trim()}, ${item.summary ?? null}, ${item.reason ?? null},
-          ${item.score ?? null}, ${item.selected === true})`;
+          ${item.score ?? null}, ${taste.on ? false : item.selected === true})`;
       return await publishArticleTx(tx as never, articleId);
     });
 
@@ -411,6 +444,74 @@ if (withBody.length) {
   }
   console.log(`republish done: changed=${changed}/${withBody.length}`);
   if (republishErrors.length) console.log(`republish failures (first 10):\n${republishErrors.slice(0, 10).join("\n")}`);
+}
+
+// ---- step 3b: taste judgment — the owner's own curation, not the upstream's ----
+// Candidates: this run's imports plus a self-heal sweep over the last 72h of replay rows that
+// never got a 'taste_select' receipt (failed/killed earlier runs). Newest first; the cap is the
+// rolling-24h selected count minus what is already in. chatJson receipts dedupe by prompt
+// identity, so a rerun (or an edited profile changing the identity) behaves sensibly. A
+// rejected item simply stays unselected — nothing else reads upstream's flag once taste is on
+// (the original value survives in articles.raw.aihot.selected for reference).
+if (taste.on && !RETRY) {
+  const cfg = taste.cfg;
+  const [pool] = await sql<{ n: number }[]>`
+    SELECT count(*)::int AS n FROM publications p JOIN articles a ON a.id = p.article_id
+    WHERE p.selected AND a.source_id LIKE ${SOURCE_PREFIX + "%"} AND a.timeline_at > now() - interval '24 hours'`;
+  let room = Math.max(0, cfg.daily_cap - pool[0]!.n);
+  const seen = await sql<{ article_id: string }[]>`
+    SELECT a.article_id FROM analyses a JOIN articles ar ON ar.id = a.article_id
+    WHERE ar.source_id LIKE ${SOURCE_PREFIX + "%"} AND a.origin = 'replay'
+      AND ar.discovered_at > now() - interval '72 hours'
+      AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.purpose = 'taste_select' AND r.subject = 'taste:' || a.article_id)`;
+  const candidateIds = [...new Set([...importedIds, ...seen.map((r) => r.article_id)])];
+  const candidates = candidateIds.length
+    ? await sql<{ id: string }[]>`SELECT id FROM articles WHERE id = ANY(${candidateIds}) ORDER BY timeline_at DESC LIMIT ${TASTE_MAX}`
+    : [];
+  console.log(`taste[${taste.on ? "on" : "off"}]: cap=${cfg.daily_cap} in=${pool[0]!.n} room=${room} candidates=${candidates.length}`);
+  if (candidates.length && room > 0) {
+    const ScoreSchema = z.object({ score: z.number().min(0).max(100), why: z.string().max(80) });
+    const model = await modelFor("score");
+    let judged = 0;
+    let picked = 0;
+    const tasteErrors: string[] = [];
+    for (const { id } of candidates) {
+      if (room <= 0) break; // cap met; the tail has no receipt and rolls onto the next run
+      try {
+        const [row] = await sql<{ title: string; summary: string | null }[]>`
+          SELECT title_zh AS title, summary_zh AS summary FROM analyses WHERE article_id = ${id} AND input_revision = 1`;
+        if (!row) continue;
+        const res = await chatJson({
+          model,
+          purpose: "taste_select",
+          subject: `taste:${id}`,
+          promptVersion: "taste-1",
+          system: "你是站长的私人资讯编辑。只按站长的口味画像给内容相关性/趣味性打分（0-100），完全无视外部榜单和他人精选。画像里明确划走的一律低分。拿不准就往低打——宁可漏掉，不可凑数。why 用不超过24个汉字的中文，一句话说清打动点或划走点。",
+          user: `【站长画像】\n${cfg.criteria}\n\n【待评内容】\n标题：${row.title}\n摘要：${row.summary ?? "（无）"}\n\n输出 JSON：{"score": 0到100的数字, "why": "一句话"}`,
+          schema: ScoreSchema,
+          temperature: 0,
+          maxTokens: 160,
+        });
+        judged++;
+        const score = Math.round(Number(res.data?.score ?? 0));
+        const why = String(res.data?.why ?? "").trim().slice(0, 60);
+        const isPick = score >= cfg.min_score;
+        if (isPick) {
+          await sql`UPDATE analyses SET selected = true, reason_zh = ${why} WHERE article_id = ${id} AND input_revision = 1`;
+          room--;
+          picked++;
+        } else {
+          await sql`UPDATE analyses SET selected = false WHERE article_id = ${id} AND input_revision = 1`;
+        }
+        await publishArticle(id);
+      } catch (err) {
+        tasteErrors.push(`${id}: ${(err as Error).message}`);
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    console.log(`taste judge: judged=${judged} picked=${picked} room_left=${room}`);
+    if (tasteErrors.length) console.log(`taste failures (first 10):\n${tasteErrors.slice(0, 10).join("\n")}`);
+  }
 }
 
 // ---- step 4: selected items get topic tags (one small model call each) + event grouping ----

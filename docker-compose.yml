@@ -15,6 +15,10 @@ x-app: &app
     LOCAL_ROUTER_URL: http://web:3000
   volumes:
     - data:/data
+    # Read-only taste profile dir on the host. Editing /var/www/noisefloor/taste/profile.json
+    # changes curation behaviour on the next sync run with NO rebuild (dir mount, so even a
+    # rename-style editor write is picked up).
+    - ../taste:/taste:ro
   depends_on:
     db:
       condition: service_healthy
