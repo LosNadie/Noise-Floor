@@ -455,10 +455,10 @@ if (withBody.length) {
 // (the original value survives in articles.raw.aihot.selected for reference).
 if (taste.on && !RETRY) {
   const cfg = taste.cfg;
-  const [pool] = await sql<{ n: number }[]>`
+  const capRows = await sql<{ n: number }[]>`
     SELECT count(*)::int AS n FROM publications p JOIN articles a ON a.id = p.article_id
     WHERE p.selected AND a.source_id LIKE ${SOURCE_PREFIX + "%"} AND a.timeline_at > now() - interval '24 hours'`;
-  let room = Math.max(0, cfg.daily_cap - pool[0]!.n);
+  let room = Math.max(0, cfg.daily_cap - capRows[0]!.n);
   const seen = await sql<{ article_id: string }[]>`
     SELECT a.article_id FROM analyses a JOIN articles ar ON ar.id = a.article_id
     WHERE ar.source_id LIKE ${SOURCE_PREFIX + "%"} AND a.origin = 'replay'
@@ -468,7 +468,7 @@ if (taste.on && !RETRY) {
   const candidates = candidateIds.length
     ? await sql<{ id: string }[]>`SELECT id FROM articles WHERE id = ANY(${candidateIds}) ORDER BY timeline_at DESC LIMIT ${TASTE_MAX}`
     : [];
-  console.log(`taste[${taste.on ? "on" : "off"}]: cap=${cfg.daily_cap} in=${pool[0]!.n} room=${room} candidates=${candidates.length}`);
+  console.log(`taste[${taste.on ? "on" : "off"}]: cap=${cfg.daily_cap} in=${capRows[0]!.n} room=${room} candidates=${candidates.length}`);
   if (candidates.length && room > 0) {
     const ScoreSchema = z.object({ score: z.number().min(0).max(100), why: z.string().max(80) });
     const model = await modelFor("score");
