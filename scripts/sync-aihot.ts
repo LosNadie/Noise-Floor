@@ -497,7 +497,9 @@ if (taste.on && !RETRY) {
         const why = String(res.data?.why ?? "").trim().slice(0, 60);
         const isPick = score >= cfg.min_score;
         if (isPick) {
-          await sql`UPDATE analyses SET selected = true, reason_zh = ${why} WHERE article_id = ${id} AND input_revision = 1`;
+          // The site no longer renders reason text; keep reason_zh as the upstream value and
+          // leave the model's `why` only in the taste receipts for the owner's audit.
+          await sql`UPDATE analyses SET selected = true WHERE article_id = ${id} AND input_revision = 1`;
           room--;
           picked++;
         } else {
