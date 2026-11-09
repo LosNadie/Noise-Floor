@@ -494,7 +494,6 @@ if (taste.on && !RETRY) {
         });
         judged++;
         const score = Math.round(Number(res.data?.score ?? 0));
-        const why = String(res.data?.why ?? "").trim().slice(0, 60);
         const isPick = score >= cfg.min_score;
         if (isPick) {
           // The site no longer renders reason text; keep reason_zh as the upstream value and
